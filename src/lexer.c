@@ -1,9 +1,92 @@
 #include "lexer.h"
+#include "list.h"
 #include "util.h"
 #include <assert.h>
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+typedef enum TokenType {
+
+  // Single-character tokens.
+  LEFT_PAREN,
+  RIGHT_PAREN,
+  LEFT_BRACE,
+  RIGHT_BRACE,
+  COMMA,
+  DOT,
+  MINUS,
+  PLUS,
+  SEMICOLON,
+  SLASH,
+  STAR,
+  // One or two character tokens.
+  BANG,
+  BANG_EQUAL,
+  EQUAL,
+  EQUAL_EQUAL,
+  GREATER,
+  GREATER_EQUAL,
+  LESS,
+  LESS_EQUAL,
+  // Literals.
+  IDENTIFIER,
+  STRING,
+  NUMBER,
+  // Keywords.
+  AND,
+  CLASS,
+  ELSE,
+  FALSE,
+  FUN,
+  FOR,
+  IF,
+  NIL,
+  OR,
+  PRINT,
+  RETURN,
+  SUPER,
+  THIS,
+  TRUE,
+  VAR,
+  WHILE,
+  EOF_T,
+
+} TokenType;
+
+typedef struct LinePos {
+  size_t line; // Line number
+  size_t x;    // Where in the line
+} Position;
+
+typedef struct Token {
+  struct Token *next;
+  TokenType type;
+  Position pos;
+  const char *str;
+  size_t len;
+} Token;
+
+/* typedef struct TokenList { */
+/*   Token *head; */
+/*   Token *tail; */
+/*   size_t size; */
+/* } TokenList; */
+typedef List_t TokenList;
+
+typedef struct Lexer {
+  const char *source;
+  size_t source_len;
+  TokenList *tokens;
+  char curr_char;
+  size_t cursor;
+  size_t line_num;
+  size_t line_pos;
+  bool error;        // error flag
+  Error errors[256]; // Array of errors (max 256)
+} Lexer;
 
 const char *whitespace = "\t\r\n";
 
@@ -13,16 +96,21 @@ TokenList *init_tokenlist(void);
 FILE *open_file(char *filename);
 char *file_contents(FILE *file);
 size_t file_size(FILE *file);
+void add_token(TokenType type, const char *beg, const char *end, size_t len);
 
 // TODO Create procedures that will work on the Token linked list
 Lexer *lex;
 
+/*****************************************************************************/
+/*                                   Lexing                                  */
+/*****************************************************************************/
 void init_lexer(char *source, size_t sourcelen) {
 
   Tput("Initialising lexer.");
   /* Will have to allocate source and tokens later */
   lex = malloc(sizeof(Lexer));
-  lex->tokens = malloc(sizeof(TokenList));
+
+  list_create((void *)&lex->tokens);
   lex->source = source;
   lex->source_len = sourcelen;
   Tprint("Source is: '%s', source length is '%zu'", lex->source,
@@ -30,155 +118,208 @@ void init_lexer(char *source, size_t sourcelen) {
 
   lex->line_num = 0;
   lex->cursor = 0;
-  lex->ln_cursor = 0;
+  lex->line_pos = 0;
 
   lex->error = false;
 }
 
-/* Functions for tokenisation ************************************************/
+/* Checks for whether symbol starts */
+bool is_identifier_start(char c) { return isalpha(c) || c == '_'; }
+
+/* Checks for whether a symbol is still going on */
+bool is_identifier_continuing(char c) {
+  return is_identifier_start(c) || isdigit(c);
+}
+
+char peek_next(size_t curr_pos) {
+
+  if ((lex->cursor >= lex->source_len)) {
+    Tprint("%sPeeking cancelled.", " ");
+    return 0;
+  }
+
+  size_t nextPos = curr_pos + 1;
+
+  Tprint("Peeking char: %c", lex->source[nextPos]);
+  return lex->source[nextPos];
+}
+
+void handle_identifier(void) {
+
+  /* bool end = !(lex->cursor <= lex->source_len); */
+
+  const char *start =
+      &(lex->source[lex->cursor]); // Pointer to where symbol starts
+  const char *end = &(lex->source[lex->cursor]); // Ptr to where symbol ends
+  Tprint("Start: %c End: %c\n", *start, *end);
+  size_t cursPos = lex->cursor;   // Where we are currently
+  size_t len = 1;                 // The length of the symbol
+  char peek = peek_next(cursPos); // The next symbol
+  char c = lex->source[cursPos];
+
+  Tprint("Start of identifier: %c", c);
+  // Checks if the current character is the start of a symbol
+  if (!is_identifier_start(c)) {
+    Eprintf("Not identifier: '%c'", c);
+    return;
+  }
+
+  while (is_identifier_continuing((peek))) {
+
+    Tprint("\tCurr char: %c\n", peek);
+    cursPos++;
+    len++;
+    end++;
+    peek = peek_next(cursPos);
+    Tprint("\tLength: %zu\n", len);
+  }
+  add_token(IDENTIFIER, start, end, len);
+}
 
 // Creates new token and adds it to the linked list stored in the lexer struct
-void add_token(TokenType type, const char *beg, size_t len) {
+void add_token(TokenType type, const char *beg, const char *end, size_t len) {
 
   Tprint("Adding token->%s", beg);
 
   if (lex->cursor >= lex->source_len || lex->source[lex->cursor] == '\0') {
-
     Tprint("%s", "End of source. Exiting.");
     return;
   }
 
   Token *token = malloc(sizeof(Token));
-
   token->type = type;
   token->pos.line = lex->line_num;
-  token->pos.x = lex->ln_cursor;
+  token->pos.x = lex->line_pos;
   token->next = NULL;
-  token->str = beg;
 
-  assert(token != NULL && token->str != NULL && "NULL problem");
+  assert((token != NULL));
 
-  // If list is empty...
-  if (lex->tokens->head == NULL) {
-    lex->tokens->head = token;
-    lex->tokens->head->next = NULL;
-    // Else...
-  } else {
-    lex->tokens->tail->next = token;
-    lex->tokens->tail = token;
-  }
+  // Preparing string of the token
+  char *tokenStr = malloc(sizeof(char) * (len + 1));
+  tokenStr[len] = '\0'; // Terminate token string
 
-  // If token is single char then we can just return
-  if (beg == NULL) {
-    Tprint("%s", "No token str");
-    return;
-  }
-  if (len < 1) {
-    Tprint("%s", "No token str");
+  // If single char
+  if (len == 1) {
+    tokenStr[0] = *beg;
+    token->str = tokenStr;
+    list_node_insert(lex->tokens, token, NULL);
+    lex->cursor++;
     return;
   }
 
   // If token is not single char...
-  char *tokenStr = malloc(
-      sizeof(char) * (len + 1)); // Setting up the string stored for the token
-  tokenStr[len] = '\0';          // Terminate string
-
   size_t index = 0; // Keeps a track of how many iterations we've done
-  while (lex->source[lex->cursor] && index < len) {
+  while (index < len) {
     tokenStr[index] = lex->source[lex->cursor];
-    lex->cursor++;
     index++;
+    lex->cursor++;
   }
 
   token->str = tokenStr;
+
+  list_node_insert(lex->tokens, token, NULL);
   Tprint("token str = %s", token->str);
+}
+
+// Gets next character and skips whitespace
+void next_char(void) {
+
+  if ((lex->cursor >= lex->source_len) || (lex->source[lex->cursor] == '\0')) {
+    return;
+  }
+
+  char next = lex->source[lex->cursor];
+  /* lex->source++; */
+
+  // Skip whitespace
+  while (next == '\n' || next == '\r' || next == '\t' || next == ' ') {
+    lex->cursor++;
+    next = lex->source[lex->cursor];
+  }
+
+  return;
 }
 
 void scan_token(void) {
 
-  if ((lex->cursor >= lex->source_len) || (lex->source[lex->cursor] == EOF)) {
+  if ((lex->cursor >= lex->source_len) || (lex->source[lex->cursor] == '\0')) {
     return;
   }
+  /* const char *curr = &lex->source[lex->cursor]; */
+  next_char();
   const char *curr = &lex->source[lex->cursor];
-  Tprint("Consumed char: %s", curr);
+  Tprint("Consumed char: '%c'", *curr);
 
   switch (*curr) {
 
     // Whitespace
   case ' ': {
-    Tprint("%s", "Token type whitespace");
     break;
   }
   case '\t': {
-    Tprint("%s", "Token type whitespace");
     break;
   }
   case '\r': {
-    Tprint("%s", "Token type whitespace");
     break;
   }
     // New line
   case '\n': {
     lex->line_num++;
-    lex->ln_cursor = 0;
-    Tprint("%s", "Token type whitespace");
+    lex->line_pos = 0;
     break;
   }
 
     // Single character tokens
   case '{': {
-    add_token(LEFT_BRACE, curr, 1);
+    add_token(LEFT_BRACE, curr, curr + 1, 1);
     break;
   }
   case '}': {
-    add_token(RIGHT_BRACE, curr, 1);
+    add_token(RIGHT_BRACE, curr, curr + 1, 1);
     break;
   }
   case '(': {
-    add_token(LEFT_PAREN, curr, 1);
+    add_token(LEFT_PAREN, curr, curr + 1, 1);
     break;
   }
   case ')': {
-    add_token(RIGHT_PAREN, curr, 1);
+    add_token(RIGHT_PAREN, curr, curr + 1, 1);
     break;
   }
   case ',': {
-    add_token(COMMA, curr, 1);
+    add_token(COMMA, curr, curr + 1, 1);
     break;
   }
   case '.': {
-    add_token(DOT, curr, 1);
+    add_token(DOT, curr, curr + 1, 1);
     break;
   }
   case '-': {
-    add_token(MINUS, curr, 1);
+    add_token(MINUS, curr, curr + 1, 1);
     break;
   }
   case '+': {
-    add_token(PLUS, curr, 1);
+    add_token(PLUS, curr, curr + 1, 1);
     break;
   }
   case ';': {
-    add_token(SEMICOLON, curr, 1);
+    add_token(SEMICOLON, curr, curr + 1, 1);
     break;
   }
   case '*': {
-    add_token(STAR, curr, 1);
+    add_token(STAR, curr, curr + 1, 1);
     break;
   }
   default:
+    if (is_identifier_start(*curr)) {
+      handle_identifier();
+      break;
+    }
     Tprint("Invalid character: %c", *curr);
     break;
   }
-}
 
-TokenList *init_tokenlist(void) {
-
-  TokenList *list = malloc(sizeof(TokenList));
-  list->head = NULL;
-  list->tail = NULL;
-
-  return list;
+  lex->cursor++;
 }
 
 /* Functions for file handling ***********************************************/
@@ -258,6 +399,23 @@ size_t file_size(FILE *file) {
   return size;
 }
 
+void print_token(void *tkn) {
+  Token *token = (Token *)tkn;
+  printf("Token string: '%s'\n", token->str);
+}
+
+void print_tokenlist(void) {
+
+  if (lex->tokens->head == NULL) {
+    printf("List of tokens is empty!\n");
+    return;
+  }
+  printf("\n\n-----------------------------------------------");
+  printf("\n\t\t-- Token list: --\n");
+  list_foreach(lex->tokens, print_token);
+  printf("\n-----------------------------------------------\n\n");
+}
+
 void test_lexer(void) {
 
   FILE *file = open_file("tests/basic-lexing");
@@ -267,17 +425,13 @@ void test_lexer(void) {
 
   init_lexer(contents, filesize);
 
-  lex->tokens = init_tokenlist();
+  /* lex->tokens; */
+  list_create((void *)&lex->tokens);
 
-  while (lex->cursor <= lex->source_len) {
+  while (lex->cursor < lex->source_len) {
     Tprint("Scanning char: %c", lex->source[lex->cursor]);
     Tprint("Cursor val: %zu", lex->cursor);
+    print_tokenlist();
     scan_token();
-    lex->cursor++;
-  }
-
-  Tprint("%s,", "Final output: ");
-
-  while (lex->tokens) {
   }
 }
