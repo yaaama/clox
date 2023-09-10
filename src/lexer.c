@@ -105,6 +105,8 @@ void scan_token(void);
   ((lex->cursor >= lex->source_len) || (lex->source[lex->cursor] == '\0')) ? 1 \
                                                                            : 0
 
+#define LEXER_CURR_LINE(lex) lex->line_position.line
+
 void init_lexer(char *source, size_t sourcelen) {
 
   Tput("Initialising lexer.");
@@ -186,6 +188,67 @@ void handle_identifier(void) {
   add_token(IDENTIFIER, start, len);
 }
 
+// Tokenises a string literal, removes the quote marks
+void handle_string_literal(void) {
+
+  const char *start =
+      &(lex->source[lex->cursor]); // Pointer to where symbol starts
+  size_t startPos = lex->cursor;
+  size_t i = startPos;
+
+  while (peek_next(i) != '"' &&
+         !((i >= lex->source_len) || (lex->source[i] == '\0'))) {
+    if (peek_next(i) == '\n') {
+      lex->line_position.line++;
+      lex->line_position.x = 0;
+    }
+    i++;
+  }
+
+  if ((i >= lex->source_len) || (lex->source[i] == '\0')) {
+    Eprintf("%s on line %zu", "Unterminated string!", LEXER_CURR_LINE(lex));
+    return;
+  }
+
+  LEXER_INCREMENT(lex);   // Trims the leading " from the string
+  lex->line_position.x++; // Accounts for us trimming " from the string
+
+  size_t len = i - startPos; // Length of the literal
+
+  add_token(STRING, start, len);
+}
+
+// BUG If you are scanning a string such as 1234a1244, then it will skip the
+// 'a'.
+void handle_number_literal(void) {
+
+  size_t i = lex->cursor;
+
+  char curr = lex->source[i];
+  if (!isdigit(curr)) {
+    Eprintf("Not a number...%s", "");
+    return;
+  }
+
+  // Scanning through the numbers
+  while (isdigit(peek_next(i))) {
+    printf("i: %zu, lex->cursor: %zu\n", i, lex->cursor);
+    i++;
+  }
+
+  // If the while loop stopped because of decimal point...
+  if (peek_next(i) == '.' && isdigit(peek_next(i + 1))) {
+    i++;
+    while (isdigit(peek_next(i))) {
+      printf("i: %zu, lex->cursor: %zu\n", i, lex->cursor);
+      i++;
+    }
+  }
+  i++;
+  size_t len = i - lex->cursor;
+  add_token(NUMBER, &lex->source[lex->cursor], len);
+}
+
 // Creates new token and adds it to the linked list stored in the lexer struct
 void add_token(TokenType type, const char *beg, size_t len) {
 
@@ -208,6 +271,8 @@ void add_token(TokenType type, const char *beg, size_t len) {
   char *tokenStr = malloc(sizeof(char) * (len + 1));
   tokenStr[len] = '\0'; // Terminate token string
 
+  size_t index = 0; // Keeps a track of how many iterations we've done
+
   // If single char
   if (len == 1) {
     tokenStr[0] = *beg;
@@ -218,7 +283,6 @@ void add_token(TokenType type, const char *beg, size_t len) {
   }
 
   // If token is not single char...
-  size_t index = 0; // Keeps a track of how many iterations we've done
   while (index < len) {
     tokenStr[index] = lex->source[lex->cursor];
     index++;
@@ -253,12 +317,7 @@ void lex_skip_comment(void) {
   while (!(LEXER_SOURCE_FINISHED(lex)) && peek_next(lex->cursor) != '\n') {
     LEXER_INCREMENT(lex);
   }
-
-  /* lex_skip_whitespace(); */
-  /* scan_token(); */
 }
-
-void scanned_whitespace(void) {}
 
 void scan_token(void) {
 
@@ -270,13 +329,16 @@ void scan_token(void) {
   Tprint("Consumed char: '%c'", *curr);
 
   switch (*curr) {
-    /* Whitespace ************************************************************/
-  case ' ': {
-    lex->line_position.x++;
+  case '"': {
+    handle_string_literal();
     break;
   }
+    /* Whitespace ************************************************************/
+  case ' ': {
+    break;
+  }
+  // FIXME Currently a tab width is only considered to be 1 space.
   case '\t': {
-    lex->line_position.x++;
     break;
   }
     // Carriage return
@@ -291,7 +353,6 @@ void scan_token(void) {
     lex->line_position.line += 1;
     break;
   }
-
     /* Single character tokens ***********************************************/
   case '{': {
     add_token(LEFT_BRACE, curr, 1);
@@ -362,6 +423,10 @@ void scan_token(void) {
     break;
   }
   default:
+    if (isdigit(*curr)) {
+      handle_number_literal();
+      break;
+    }
     if (is_identifier_start(*curr)) {
       handle_identifier();
       break;
@@ -483,6 +548,7 @@ void test_lexer(void) {
     Tprint("Cursor val: %zu", lex->cursor);
     scan_token();
     LEXER_INCREMENT(lex);
+    lex->line_position.x++;
     print_tokenlist();
   }
   print_tokenlist();

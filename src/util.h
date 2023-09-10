@@ -8,7 +8,7 @@
 /*                                   Macros                                  */
 /*****************************************************************************/
 #define DEBUG 1
-#define TRACING 1
+#define TRACING 0
 
 // Macro to print an error to stderr
 #define Eprintf(format, ...)                                                   \
