@@ -11,31 +11,31 @@
 typedef enum TokenType {
 
   // Single-character tokens.
-  LEFT_PAREN,
-  RIGHT_PAREN,
-  LEFT_BRACE,
-  RIGHT_BRACE,
-  COMMA,
-  DOT,
-  MINUS,
-  PLUS,
-  SEMICOLON,
-  SLASH,
-  STAR,
+  LEFT_PAREN,  // (
+  RIGHT_PAREN, // )
+  LEFT_BRACE,  // {
+  RIGHT_BRACE, // }
+  COMMA,       // ,
+  DOT,         // .
+  MINUS,       // -
+  PLUS,        // +
+  SEMICOLON,   // ;
+  SLASH,       // /
+  STAR,        // *
   // One or two character tokens.
-  BANG,
-  BANG_EQUAL,
-  EQUAL,
-  EQUAL_EQUAL,
-  GREATER,
-  GREATER_EQUAL,
-  LESS,
-  LESS_EQUAL,
-  // Literals.
-  IDENTIFIER,
-  STRING,
-  NUMBER,
-  // Keywords.
+  BANG,          // !
+  BANG_EQUAL,    // !=
+  EQUAL,         // =
+  EQUAL_EQUAL,   // ==
+  GREATER,       // >
+  GREATER_EQUAL, // >=
+  LESS,          // <
+  LESS_EQUAL,    // <=
+  // Literals
+  IDENTIFIER, // The name of a function, variable, or keyword of some kind
+  STRING,     // String literal
+  NUMBER,     // A number literal
+  // Keywords
   AND,
   CLASS,
   ELSE,
@@ -52,73 +52,73 @@ typedef enum TokenType {
   TRUE,
   VAR,
   WHILE,
-  EOF_T,
+  EOF_T,  // End of file
+  INVALID // Invalid
 
 } TokenType;
 
-typedef struct LinePos {
+typedef struct LinePosition {
   size_t line; // Line number
   size_t x;    // Where in the line
-} Position;
+} LinePosition;
 
 typedef struct Token {
-  struct Token *next;
   TokenType type;
-  Position pos;
+  LinePosition pos;
   const char *str;
   size_t len;
 } Token;
 
-/* typedef struct TokenList { */
-/*   Token *head; */
-/*   Token *tail; */
-/*   size_t size; */
-/* } TokenList; */
-typedef List_t TokenList;
+typedef List_t TokenList; // Where we keep our tokens
 
 typedef struct Lexer {
-  const char *source;
-  size_t source_len;
-  TokenList *tokens;
-  char curr_char;
-  size_t cursor;
-  size_t line_num;
-  size_t line_pos;
-  bool error;        // error flag
-  Error errors[256]; // Array of errors (max 256)
+  const char *source;         // The source we are lexing
+  size_t source_len;          // Length of the source file
+  TokenList *tokens;          // Stores our tokens (alias for List_t)
+  char curr_char;             // TODO
+  size_t consumed_cursor;     // Tracks the characters we have consumed
+  size_t cursor;              // Tracks the position of where we have scanned
+  LinePosition line_position; // Which line we are in and where
+  bool error;                 // Error flag
+  Error errors[256];          // Array of errors (max 256)
 } Lexer;
 
-const char *whitespace = "\t\r\n";
+Lexer *lex; // The lexer
 
 /* Function declarations *****************************************************/
 void init_lexer(char *source, size_t sourcelen);
-TokenList *init_tokenlist(void);
-FILE *open_file(char *filename);
-char *file_contents(FILE *file);
-size_t file_size(FILE *file);
-void add_token(TokenType type, const char *beg, const char *end, size_t len);
-
-// TODO Create procedures that will work on the Token linked list
-Lexer *lex;
+FILE *open_file(char *filename); // Opens file
+char *file_contents(FILE *file); // Retrieves contents from file
+size_t file_size(FILE *file);    // Size of file
+void add_token(TokenType type, const char *beg, size_t len); // Adds a token
+void insert_token(Token *token); // Inserts a token into our TokenList
+void scan_token(void);
 
 /*****************************************************************************/
 /*                                   Lexing                                  */
 /*****************************************************************************/
+
+#define LEXER_INCREMENT(lex) lex->cursor++
+
+// Macro to check if the source has been fully lexed
+#define LEXER_SOURCE_FINISHED(lex)                                             \
+  ((lex->cursor >= lex->source_len) || (lex->source[lex->cursor] == '\0')) ? 1 \
+                                                                           : 0
+
 void init_lexer(char *source, size_t sourcelen) {
 
   Tput("Initialising lexer.");
-  /* Will have to allocate source and tokens later */
-  lex = malloc(sizeof(Lexer));
 
-  list_create((void *)&lex->tokens);
-  lex->source = source;
-  lex->source_len = sourcelen;
+  lex = malloc(sizeof(Lexer));
+  list_create((void *)&lex->tokens); // Creating the tokenlist
+  lex->source = source;              // Assigning our source
+  lex->source_len = sourcelen;       // The source length
   Tprint("Source is: '%s', source length is '%zu'", lex->source,
          lex->source_len);
 
-  lex->line_num = 0;
-  lex->cursor = 0;
-  lex->line_pos = 0;
+  lex->cursor = 0; // Where we are in the overall source
+  lex->line_position.line = 0;
+  lex->line_position.x = 0;
 
   lex->error = false;
 }
@@ -133,9 +133,9 @@ bool is_identifier_continuing(char c) {
 
 char peek_next(size_t curr_pos) {
 
-  if ((lex->cursor >= lex->source_len)) {
+  if (LEXER_SOURCE_FINISHED(lex)) {
     Tprint("%sPeeking cancelled.", " ");
-    return 0;
+    return '\0';
   }
 
   size_t nextPos = curr_pos + 1;
@@ -144,9 +144,19 @@ char peek_next(size_t curr_pos) {
   return lex->source[nextPos];
 }
 
-void handle_identifier(void) {
+bool match_next(char c) {
+  if (LEXER_SOURCE_FINISHED(lex)) {
+    return false;
+  }
 
-  /* bool end = !(lex->cursor <= lex->source_len); */
+  if (peek_next(lex->cursor) != c) {
+    return false;
+  }
+
+  return true;
+}
+
+void handle_identifier(void) {
 
   const char *start =
       &(lex->source[lex->cursor]); // Pointer to where symbol starts
@@ -173,11 +183,11 @@ void handle_identifier(void) {
     peek = peek_next(cursPos);
     Tprint("\tLength: %zu\n", len);
   }
-  add_token(IDENTIFIER, start, end, len);
+  add_token(IDENTIFIER, start, len);
 }
 
 // Creates new token and adds it to the linked list stored in the lexer struct
-void add_token(TokenType type, const char *beg, const char *end, size_t len) {
+void add_token(TokenType type, const char *beg, size_t len) {
 
   Tprint("Adding token->%s", beg);
 
@@ -188,9 +198,9 @@ void add_token(TokenType type, const char *beg, const char *end, size_t len) {
 
   Token *token = malloc(sizeof(Token));
   token->type = type;
-  token->pos.line = lex->line_num;
-  token->pos.x = lex->line_pos;
-  token->next = NULL;
+  token->len = len;
+  token->pos.line = lex->line_position.line;
+  token->pos.x = lex->line_position.x;
 
   assert((token != NULL));
 
@@ -203,7 +213,7 @@ void add_token(TokenType type, const char *beg, const char *end, size_t len) {
     tokenStr[0] = *beg;
     token->str = tokenStr;
     list_node_insert(lex->tokens, token, NULL);
-    lex->cursor++;
+
     return;
   }
 
@@ -212,7 +222,7 @@ void add_token(TokenType type, const char *beg, const char *end, size_t len) {
   while (index < len) {
     tokenStr[index] = lex->source[lex->cursor];
     index++;
-    lex->cursor++;
+    LEXER_INCREMENT(lex);
   }
 
   token->str = tokenStr;
@@ -221,93 +231,134 @@ void add_token(TokenType type, const char *beg, const char *end, size_t len) {
   Tprint("token str = %s", token->str);
 }
 
-// Gets next character and skips whitespace
-void next_char(void) {
+// Skips whitespaces and returns next character
+void lex_skip_whitespace(void) {
 
-  if ((lex->cursor >= lex->source_len) || (lex->source[lex->cursor] == '\0')) {
+  if (LEXER_SOURCE_FINISHED(lex)) {
     return;
   }
 
   char next = lex->source[lex->cursor];
-  /* lex->source++; */
 
   // Skip whitespace
   while (next == '\n' || next == '\r' || next == '\t' || next == ' ') {
-    lex->cursor++;
-    next = lex->source[lex->cursor];
+    LEXER_INCREMENT(lex);
   }
 
   return;
 }
 
+void lex_skip_comment(void) {
+
+  while (!(LEXER_SOURCE_FINISHED(lex)) && peek_next(lex->cursor) != '\n') {
+    LEXER_INCREMENT(lex);
+  }
+
+  /* lex_skip_whitespace(); */
+  /* scan_token(); */
+}
+
+void scanned_whitespace(void) {}
+
 void scan_token(void) {
 
-  if ((lex->cursor >= lex->source_len) || (lex->source[lex->cursor] == '\0')) {
+  if (LEXER_SOURCE_FINISHED(lex)) {
     return;
   }
-  /* const char *curr = &lex->source[lex->cursor]; */
-  next_char();
-  const char *curr = &lex->source[lex->cursor];
+
+  const char *curr = &lex->source[lex->cursor]; // Current char
   Tprint("Consumed char: '%c'", *curr);
 
   switch (*curr) {
-
-    // Whitespace
+    /* Whitespace ************************************************************/
   case ' ': {
+    lex->line_position.x++;
     break;
   }
   case '\t': {
+    lex->line_position.x++;
     break;
   }
+    // Carriage return
   case '\r': {
+    lex->line_position.x = 0;
+    lex->line_position.line += 1;
     break;
   }
     // New line
   case '\n': {
-    lex->line_num++;
-    lex->line_pos = 0;
+    lex->line_position.x = 0;
+    lex->line_position.line += 1;
     break;
   }
 
-    // Single character tokens
+    /* Single character tokens ***********************************************/
   case '{': {
-    add_token(LEFT_BRACE, curr, curr + 1, 1);
+    add_token(LEFT_BRACE, curr, 1);
     break;
   }
   case '}': {
-    add_token(RIGHT_BRACE, curr, curr + 1, 1);
+    add_token(RIGHT_BRACE, curr, 1);
     break;
   }
   case '(': {
-    add_token(LEFT_PAREN, curr, curr + 1, 1);
+    add_token(LEFT_PAREN, curr, 1);
     break;
   }
   case ')': {
-    add_token(RIGHT_PAREN, curr, curr + 1, 1);
+    add_token(RIGHT_PAREN, curr, 1);
     break;
   }
   case ',': {
-    add_token(COMMA, curr, curr + 1, 1);
+    add_token(COMMA, curr, 1);
     break;
   }
   case '.': {
-    add_token(DOT, curr, curr + 1, 1);
+    add_token(DOT, curr, 1);
     break;
   }
   case '-': {
-    add_token(MINUS, curr, curr + 1, 1);
+    add_token(MINUS, curr, 1);
     break;
   }
   case '+': {
-    add_token(PLUS, curr, curr + 1, 1);
+    add_token(PLUS, curr, 1);
     break;
   }
   case ';': {
-    add_token(SEMICOLON, curr, curr + 1, 1);
+    add_token(SEMICOLON, curr, 1);
     break;
   }
   case '*': {
-    add_token(STAR, curr, curr + 1, 1);
+    add_token(STAR, curr, 1);
+    break;
+  }
+  /* Operators *************************************************************/
+  case '!': {
+    match_next('=') ? add_token(BANG_EQUAL, curr, 2) : add_token(BANG, curr, 1);
+    break;
+  }
+  case '=': {
+    match_next('=') ? add_token(EQUAL_EQUAL, curr, 2)
+                    : add_token(EQUAL, curr, 1);
+    break;
+  }
+  case '<': {
+    match_next('=') ? add_token(LESS_EQUAL, curr, 2) : add_token(LESS, curr, 1);
+    break;
+  }
+  case '>': {
+    match_next('=') ? add_token(GREATER_EQUAL, curr, 2)
+                    : add_token(GREATER, curr, 1);
+    break;
+  }
+  // Division OR the start of a comment
+  case '/': {
+    if (match_next('/')) { // If comment (//)...
+      lex_skip_comment();
+    } else { // If it is single slash...
+      add_token(SLASH, curr, 1);
+    }
     break;
   }
   default:
@@ -318,8 +369,6 @@ void scan_token(void) {
     Tprint("Invalid character: %c", *curr);
     break;
   }
-
-  lex->cursor++;
 }
 
 /* Functions for file handling ***********************************************/
@@ -401,7 +450,8 @@ size_t file_size(FILE *file) {
 
 void print_token(void *tkn) {
   Token *token = (Token *)tkn;
-  printf("Token string: '%s'\n", token->str);
+  printf("Token string: '%s', Line: %zu, pos: %zu, length: %zu\n", token->str,
+         token->pos.line, token->pos.x, token->len);
 }
 
 void print_tokenlist(void) {
@@ -418,7 +468,7 @@ void print_tokenlist(void) {
 
 void test_lexer(void) {
 
-  FILE *file = open_file("tests/basic-lexing");
+  FILE *file = open_file("tests/lexer-token-position");
   size_t filesize = file_size(file);
   char *contents = file_contents(file);
   Tprint("Contents: %s, filesize: %zu", contents, filesize);
@@ -428,10 +478,12 @@ void test_lexer(void) {
   /* lex->tokens; */
   list_create((void *)&lex->tokens);
 
-  while (lex->cursor < lex->source_len) {
+  while (!LEXER_SOURCE_FINISHED(lex)) {
     Tprint("Scanning char: %c", lex->source[lex->cursor]);
     Tprint("Cursor val: %zu", lex->cursor);
-    print_tokenlist();
     scan_token();
+    LEXER_INCREMENT(lex);
+    print_tokenlist();
   }
+  print_tokenlist();
 }
