@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* A list of token types */
 typedef enum TokenType {
 
   // Single-character tokens.
@@ -56,34 +57,39 @@ typedef enum TokenType {
   INVALID // Invalid
 } TokenType;
 
+/* KeyWord struct */
 typedef struct KeyWord {
   char *word;
   TokenType token_type;
 } KeyWord;
 
-// Keywords 2d array (acts as a map)
+/* Keywords 2d array */
 KeyWord kw[16] = {
     {"and", AND},   {"class", CLASS}, {"else", ELSE},     {"false", FALSE},
     {"for", FOR},   {"fun", FUN},     {"if", IF},         {"nil", NIL},
     {"or", OR},     {"print", PRINT}, {"return", RETURN}, {"super", SUPER},
     {"this", THIS}, {"true", TRUE},   {"var", VAR},       {"while", WHILE}};
 
+/* Macro for how many keywords we have in the language  */
 #define KW_COUNT 16
 
+/* Vector to keep track of location info within the source */
 typedef struct LinePosition {
   size_t line; // Line number
   size_t x;    // Where in the line
 } LinePosition;
 
+/* Token structure. */
 typedef struct Token {
-  TokenType type;
-  LinePosition pos;
-  const char *str;
-  size_t len;
+  TokenType type;   // Token type
+  LinePosition pos; // FIXME Its position in source
+  const char *str;  // String literal
+  size_t len;       // Length of the token
 } Token;
 
 typedef List_t TokenList; // Where we keep our tokens
 
+/* The Lexer struct */
 typedef struct Lexer {
   const char *source; // The source we are lexing
   size_t source_len;  // Length of the source file
@@ -100,31 +106,33 @@ Lexer *lex; // The lexer
 
 /* Function declarations *****************************************************/
 void init_lexer(char *source, size_t sourcelen);
-FILE *open_file(char *filename); // Opens file
-char *file_contents(FILE *file); // Retrieves contents from file
-size_t file_size(FILE *file);    // Size of file
+FILE *file_open(char *filename);       // Opens file
+char *file_open_read(char *filename);  // Opens and returns text from file
+size_t file_size_name(char *filename); // Size of file
 void add_token(TokenType type, const char *beg, size_t len); // Adds a token
-void insert_token(Token *token); // Inserts a token into our TokenList
-void scan_token(void);
+void scan_token(void); // Scans the current character in source
+size_t file_size_ptr(FILE *fileptr);
 
 /*****************************************************************************/
 /*                                   Lexing                                  */
 /*****************************************************************************/
 
+/* Macro to increment the lexer provided */
 #define LEXER_INCREMENT(lex) lex->cursor++
 
-// Macro to check if the source has been fully lexed
+/* Macro to check if the source has been fully lexed */
 #define LEXER_SOURCE_FINISHED(lex)                                             \
   ((lex->cursor >= lex->source_len) || (lex->source[lex->cursor] == '\0')) ? 1 \
                                                                            : 0
 
+/* Helpful macro to retrive the current line the lexer is on  */
 #define LEXER_CURR_LINE(lex) lex->line_position.line
 
 void init_lexer(char *source, size_t sourcelen) {
 
   PRINT_TRACE("%s", "Initialising lexer.");
 
-  lex = malloc(sizeof(Lexer));
+  lex = malloc(sizeof(Lexer));       // Create our lexer struct
   list_create((void *)&lex->tokens); // Creating the tokenlist
   lex->source = source;              // Assigning our source
   lex->source_len = sourcelen;       // The source length
@@ -156,7 +164,7 @@ char peek_next(size_t curr_pos) {
 
   size_t nextPos = curr_pos + 1;
 
-  PRINT_TRACE("Peeking char: %c", lex->source[nextPos]);
+  /* PRINT_TRACE("Peeking char: %c", lex->source[nextPos]); */
   return lex->source[nextPos];
 }
 
@@ -173,37 +181,37 @@ bool match_next(char c) {
   return true;
 }
 
+/* Handles when an identifier of some kind is encountered.
+  An identifier is a string without a quote delimiter. */
 void handle_identifier(void) {
 
   const char *start =
-      &(lex->source[lex->cursor]); // Pointer to where symbol starts
-  const char *end = &(lex->source[lex->cursor]); // Ptr to where symbol ends
-  PRINT_TRACE("Start: %c End: %c\n", *start, *end);
-  size_t cursPos = lex->cursor;   // Where we are currently
-  size_t len = 1;                 // The length of the symbol
-  char peek = peek_next(cursPos); // The next symbol
+      &(lex->source[lex->cursor]); // Pointer to where identifier starts in the
+                                   // source
+  size_t cursPos = lex->cursor;    // Where we are currently
+  size_t len = 1;                  // The length of the identifier
+  char peek = peek_next(cursPos);  // The next identifier
   char c = lex->source[cursPos];
 
-  PRINT_TRACE("Start of identifier: %c", c);
-  // Checks if the current character is the start of a symbol
+  PRINT_TRACE("Curr char: '%c'", c);
+  // Checks if the current character is the start of a identifier
   if (!is_identifier_start(c)) {
-    PRINT_ERROR("Not identifier: '%c'", c);
+    PRINT_ERROR("Not start identifier: '%c'", c);
     return;
   }
 
   while (is_identifier_continuing((peek))) {
 
-    PRINT_TRACE("\tCurr char: %c, Length: %zu \n", peek, len);
+    PRINT_TRACE("Curr char: '%c', id len %zu", peek, len);
     cursPos++;
     len++;
-    end++;
     peek = peek_next(cursPos);
   }
 
   add_token(IDENTIFIER, start, len);
 }
 
-// Tokenises a string literal, removes the quote marks
+/* Tokenises a string literal, removes the quote marks */
 void handle_string_literal(void) {
 
   const char *start =
@@ -264,7 +272,8 @@ void handle_number_literal(void) {
   add_token(NUMBER, &lex->source[lex->cursor], len);
 }
 
-// Creates new token and adds it to the linked list stored in the lexer struct
+/* Creates new token and adds it to the linked list stored in the lexer struct
+ */
 void add_token(TokenType type, const char *beg, size_t len) {
 
   PRINT_TRACE("Adding token->%s", beg);
@@ -305,7 +314,7 @@ void add_token(TokenType type, const char *beg, size_t len) {
     LEXER_INCREMENT(lex);
   }
 
-  // If the next character is not a WS then we want to read it
+  // NOTE: If the next character is not a WS then we want to read it
   // For example: "func foo()"
   // If we do not decrement cursor then the ( will not be read.
   if (!isspace(lex->source[lex->cursor])) {
@@ -326,7 +335,8 @@ void add_token(TokenType type, const char *beg, size_t len) {
   PRINT_TRACE("token str = %s", token->str);
 }
 
-// Skips whitespaces and returns next character
+/* NOTE UNUSED
+   Skips whitespaces and returns next character */
 void lex_skip_whitespace(void) {
 
   if (LEXER_SOURCE_FINISHED(lex)) {
@@ -343,6 +353,7 @@ void lex_skip_whitespace(void) {
   return;
 }
 
+/* Skips a comment line */
 void lex_skip_comment(void) {
 
   while (!(LEXER_SOURCE_FINISHED(lex)) && peek_next(lex->cursor) != '\n') {
@@ -350,6 +361,7 @@ void lex_skip_comment(void) {
   }
 }
 
+/* Scans the current character in source and lexes it appropiately */
 void scan_token(void) {
 
   if (LEXER_SOURCE_FINISHED(lex)) {
@@ -460,100 +472,25 @@ void scan_token(void) {
     break;
   }
   default:
+    // Numbers
     if (isdigit(*curr)) {
       handle_number_literal();
       break;
     }
+    // Identifiers
     if (is_identifier_start(*curr)) {
       handle_identifier();
       break;
     }
 
-    // If nothing matches
+    // If nothing matches...
+    // TODO handle if nothing matches
     /* add_token(INVALID, curr, 1); */
     lex->error = true;
     /* lex->errors[] */
     PRINT_TRACE("Invalid character: %c", *curr);
     break;
   }
-}
-
-/* Functions for file handling ***********************************************/
-
-// Opens file
-FILE *open_file(char *filename) {
-
-  FILE *fp = fopen(filename, "rb");
-
-  if (fp == NULL) {
-    PRINT_ERROR("FILE %s does not exist!", filename);
-    print_usage();
-    exit(1);
-  }
-  PRINT_TRACE("File '%s' opened", filename);
-
-  return fp;
-}
-
-// Returns string of file contents
-char *file_contents(FILE *file) {
-
-  size_t filesize = file_size(file); // Size of file in bytes
-  PRINT_TRACE("File size is: %zu", filesize);
-
-  char *contents =
-      malloc(sizeof(char) * (filesize + 1)); // String to store the bytes read
-  contents[filesize] = '\0';                 // Will terminate the char
-  size_t readCount = 0; // Keeps track of the number of bytes read
-  size_t loopCount = 0; // Keeps track of iterations
-  /* PRINT_TRACE("readCount: %zu", readCount); */
-
-  while (readCount < filesize) {
-
-    // Exit if eof reached
-    if (feof(file)) {
-      PRINT_TRACE("%s", "Eof reached!");
-      break;
-    }
-    // Exit if error
-    if (ferror(file)) {
-      PRINT_TRACE("%s",
-                  "Some sort of error has occured whilst reading the file.");
-      break;
-    }
-
-    // Reading from file
-    size_t currBytesRead = fread(contents, 1, filesize - readCount, file);
-    readCount += currBytesRead;
-    PRINT_TRACE("Loop: %zu, readCount: %zu", loopCount, readCount);
-    loopCount++;
-  }
-
-  // If the number of bytes are not the same as the filesize, then output error
-  if (readCount != filesize) {
-    PRINT_ERROR("%s", "Not all of the file was read!");
-    fclose(file);
-    return NULL;
-  }
-
-  fclose(file);
-  return contents;
-}
-
-// Returns file length
-size_t file_size(FILE *file) {
-
-  int err = fseek(file, 0L, SEEK_END);
-  if (err) {
-    PRINT_ERROR("%s", "fseek returned err");
-    return 0;
-  }
-  long size = ftell(file);
-  assert(size > 0 && "File is empty!");
-
-  rewind(file);
-
-  return size;
 }
 
 void print_token(void *tkn) {
@@ -576,16 +513,14 @@ void print_tokenlist(void) {
 
 void test_lexer(void) {
 
-  FILE *file = open_file("tests/lexer-keywords");
-  size_t filesize = file_size(file);
-  char *contents = file_contents(file);
-  PRINT_TRACE("Contents: %s, filesize: %zu", contents, filesize);
+  char *source = "tests/lexer-keywords";
+  size_t filesize = file_size_name(source);
+  char *contents = file_open_read(source);
 
-  PRINT_ERROR("%s", "Hey there champ!");
+  PRINT_TRACE("Contents: \n%s", contents);
 
   init_lexer(contents, filesize);
 
-  /* lex->tokens; */
   list_create((void *)&lex->tokens);
 
   while (!LEXER_SOURCE_FINISHED(lex)) {

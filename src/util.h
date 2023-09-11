@@ -67,6 +67,7 @@ static Error err_ok = {.error_type = NONE, .msg = NULL};
 /*                             Exposed functions                             */
 /*****************************************************************************/
 
+char *file_open_read(char *filename);
 void print_usage(void);
 
 #endif // UTIL_H_
