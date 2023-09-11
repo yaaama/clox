@@ -511,6 +511,14 @@ void print_tokenlist(void) {
   printf("\n-----------------------------------------------\n\n");
 }
 
+void destroy_lexer(Lexer *lex) {
+  PRINT_TRACE("Destroying the lexer! %s", "");
+  free((void *)lex->source);
+  list_destroy(lex->tokens);
+  free(lex);
+  PRINT_TRACE("%s", "Lexer destroyed.");
+}
+
 void test_lexer(void) {
 
   char *source = "tests/lexer-keywords";
@@ -531,4 +539,5 @@ void test_lexer(void) {
     lex->line_position.x++;
   }
   print_tokenlist();
+  destroy_lexer(lex);
 }
