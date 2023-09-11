@@ -63,12 +63,21 @@ void list_destroy(List_t *list) {
   // Next node
   ListNode_t *next = list->head->next;
 
+  size_t counter = 0;
   // Free up all of the nodes
-  while (curr != NULL) {
+  while (curr) {
     free(curr);
+    counter++;
     curr = next;
+    if (!curr->next) {
+      break;
+    }
     next = curr->next;
   }
+  // Free the tail
+  free(list->tail);
+  counter++;
+  fprintf(stdout, "%s: Freed %zu items.", __FUNCTION__, counter);
   // Finally free the list
   free(list);
 }
