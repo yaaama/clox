@@ -5,29 +5,50 @@
 
 #define IS_NOT_NULL(a) (a != NULL)
 
+/**
+ *  \brief Creates a new doubly linked list and assigns it to the out argument.
+ *
+ *  This function creates a new list, allocating memory for it using malloc.
+ *  Size is initialised as 0 and both head and tail will point to NULL.
+ *
+ *  \param out Where a reference to the list will be passed to.
+ *  \return void
+ */
 void list_create(void **out) {
 
   List_t *list = malloc(sizeof(List_t));
   list->size = 0;
   list->head = NULL;
-  /* list->head->data = NULL; */
 
   list->tail = NULL;
-  /* list->tail->data = NULL; */
 
-  /* list->head->next = list->tail; */
-  /* list->tail->previous = list->head; */
   printf("List created!");
 
   *out = list;
 }
 
+/**
+ *  \brief Returns the size of a given list.
+ *
+ *  It will access the list structs "size" member and return it.
+ *
+ *  \param list pointer.
+ *  \return size_t size.
+ */
 size_t list_size(List_t *list) {
 
   assert(list != NULL && "List is NULL.");
   return list->size;
 }
 
+/**
+ *  \brief Destroys a list and frees all of its memory.
+ *
+ *  Detailed description
+ *
+ *  \param param
+ *  \return return type
+ */
 void list_destroy(List_t *list) {
 
   assert(list != NULL);

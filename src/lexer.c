@@ -109,14 +109,14 @@ void scan_token(void);
 
 void init_lexer(char *source, size_t sourcelen) {
 
-  Tput("Initialising lexer.");
+  PRINT_TRACE("%s", "Initialising lexer.");
 
   lex = malloc(sizeof(Lexer));
   list_create((void *)&lex->tokens); // Creating the tokenlist
   lex->source = source;              // Assigning our source
   lex->source_len = sourcelen;       // The source length
-  Tprint("Source is: '%s', source length is '%zu'", lex->source,
-         lex->source_len);
+  PRINT_TRACE("Source is: '%s', source length is '%zu'", lex->source,
+              lex->source_len);
 
   lex->cursor = 0; // Where we are in the overall source
   lex->line_position.line = 0;
@@ -136,13 +136,13 @@ bool is_identifier_continuing(char c) {
 char peek_next(size_t curr_pos) {
 
   if (LEXER_SOURCE_FINISHED(lex)) {
-    Tprint("%sPeeking cancelled.", " ");
+    PRINT_TRACE("%sPeeking cancelled.", " ");
     return '\0';
   }
 
   size_t nextPos = curr_pos + 1;
 
-  Tprint("Peeking char: %c", lex->source[nextPos]);
+  PRINT_TRACE("Peeking char: %c", lex->source[nextPos]);
   return lex->source[nextPos];
 }
 
@@ -163,27 +163,27 @@ void handle_identifier(void) {
   const char *start =
       &(lex->source[lex->cursor]); // Pointer to where symbol starts
   const char *end = &(lex->source[lex->cursor]); // Ptr to where symbol ends
-  Tprint("Start: %c End: %c\n", *start, *end);
+  PRINT_TRACE("Start: %c End: %c\n", *start, *end);
   size_t cursPos = lex->cursor;   // Where we are currently
   size_t len = 1;                 // The length of the symbol
   char peek = peek_next(cursPos); // The next symbol
   char c = lex->source[cursPos];
 
-  Tprint("Start of identifier: %c", c);
+  PRINT_TRACE("Start of identifier: %c", c);
   // Checks if the current character is the start of a symbol
   if (!is_identifier_start(c)) {
-    Eprintf("Not identifier: '%c'", c);
+    PRINT_ERROR("Not identifier: '%c'", c);
     return;
   }
 
   while (is_identifier_continuing((peek))) {
 
-    Tprint("\tCurr char: %c\n", peek);
+    PRINT_TRACE("\tCurr char: %c\n", peek);
     cursPos++;
     len++;
     end++;
     peek = peek_next(cursPos);
-    Tprint("\tLength: %zu\n", len);
+    PRINT_TRACE("\tLength: %zu\n", len);
   }
   add_token(IDENTIFIER, start, len);
 }
@@ -206,7 +206,7 @@ void handle_string_literal(void) {
   }
 
   if ((i >= lex->source_len) || (lex->source[i] == '\0')) {
-    Eprintf("%s on line %zu", "Unterminated string!", LEXER_CURR_LINE(lex));
+    PRINT_ERROR("%s on line %zu", "Unterminated string!", LEXER_CURR_LINE(lex));
     return;
   }
 
@@ -218,15 +218,15 @@ void handle_string_literal(void) {
   add_token(STRING, start, len);
 }
 
-// BUG If you are scanning a string such as 1234a1244, then it will skip the
-// 'a'.
+// BUG If you are scanning a string such as big1234a1244, then it will skip the
+// 'a for some reason'.
 void handle_number_literal(void) {
 
   size_t i = lex->cursor;
 
   char curr = lex->source[i];
   if (!isdigit(curr)) {
-    Eprintf("Not a number...%s", "");
+    PRINT_ERROR("Not a number...%s", "");
     return;
   }
 
@@ -252,10 +252,10 @@ void handle_number_literal(void) {
 // Creates new token and adds it to the linked list stored in the lexer struct
 void add_token(TokenType type, const char *beg, size_t len) {
 
-  Tprint("Adding token->%s", beg);
+  PRINT_TRACE("Adding token->%s", beg);
 
   if (lex->cursor >= lex->source_len || lex->source[lex->cursor] == '\0') {
-    Tprint("%s", "End of source. Exiting.");
+    PRINT_TRACE("%s", "End of source. Exiting.");
     return;
   }
 
@@ -292,7 +292,7 @@ void add_token(TokenType type, const char *beg, size_t len) {
   token->str = tokenStr;
 
   list_node_insert(lex->tokens, token, NULL);
-  Tprint("token str = %s", token->str);
+  PRINT_TRACE("token str = %s", token->str);
 }
 
 // Skips whitespaces and returns next character
@@ -326,13 +326,15 @@ void scan_token(void) {
   }
 
   const char *curr = &lex->source[lex->cursor]; // Current char
-  Tprint("Consumed char: '%c'", *curr);
+  PRINT_TRACE("Consumed char: '%c'", *curr);
 
   switch (*curr) {
   case '"': {
     handle_string_literal();
     break;
   }
+  case 0:
+    add_token(EOF_T, curr, 1);
     /* Whitespace ************************************************************/
   case ' ': {
     break;
@@ -431,7 +433,7 @@ void scan_token(void) {
       handle_identifier();
       break;
     }
-    Tprint("Invalid character: %c", *curr);
+    PRINT_TRACE("Invalid character: %c", *curr);
     break;
   }
 }
@@ -441,14 +443,14 @@ void scan_token(void) {
 // Opens file
 FILE *open_file(char *filename) {
 
-  FILE *fp = fopen(filename, "r");
+  FILE *fp = fopen(filename, "rb");
 
   if (fp == NULL) {
-    Eprintf("FILE %s does not exist!", filename);
+    PRINT_ERROR("FILE %s does not exist!", filename);
     print_usage();
     exit(1);
   }
-  Tprint("File '%s' opened", filename);
+  PRINT_TRACE("File '%s' opened", filename);
 
   return fp;
 }
@@ -457,38 +459,39 @@ FILE *open_file(char *filename) {
 char *file_contents(FILE *file) {
 
   size_t filesize = file_size(file); // Size of file in bytes
-  Tprint("File size is: %zu", filesize);
+  PRINT_TRACE("File size is: %zu", filesize);
 
   char *contents =
       malloc(sizeof(char) * (filesize + 1)); // String to store the bytes read
   contents[filesize] = '\0';                 // Will terminate the char
   size_t readCount = 0; // Keeps track of the number of bytes read
   size_t loopCount = 0; // Keeps track of iterations
-  /* Tprint("readCount: %zu", readCount); */
+  /* PRINT_TRACE("readCount: %zu", readCount); */
 
   while (readCount < filesize) {
 
     // Exit if eof reached
     if (feof(file)) {
-      Tprint("%s", "Eof reached!");
+      PRINT_TRACE("%s", "Eof reached!");
       break;
     }
     // Exit if error
     if (ferror(file)) {
-      Tprint("%s", "Some sort of error has occured whilst reading the file.");
+      PRINT_TRACE("%s",
+                  "Some sort of error has occured whilst reading the file.");
       break;
     }
 
     // Reading from file
     size_t currBytesRead = fread(contents, 1, filesize - readCount, file);
     readCount += currBytesRead;
-    Tprint("Loop: %zu, readCount: %zu", loopCount, readCount);
+    PRINT_TRACE("Loop: %zu, readCount: %zu", loopCount, readCount);
     loopCount++;
   }
 
   // If the number of bytes are not the same as the filesize, then output error
   if (readCount != filesize) {
-    Eprintf("%s", "Not all of the file was read!");
+    PRINT_ERROR("%s", "Not all of the file was read!");
     fclose(file);
     return NULL;
   }
@@ -502,7 +505,7 @@ size_t file_size(FILE *file) {
 
   int err = fseek(file, 0L, SEEK_END);
   if (err) {
-    Eprintf("%s", "fseek returned err");
+    PRINT_ERROR("%s", "fseek returned err");
     return 0;
   }
   long size = ftell(file);
@@ -536,7 +539,9 @@ void test_lexer(void) {
   FILE *file = open_file("tests/lexer-token-position");
   size_t filesize = file_size(file);
   char *contents = file_contents(file);
-  Tprint("Contents: %s, filesize: %zu", contents, filesize);
+  PRINT_TRACE("Contents: %s, filesize: %zu", contents, filesize);
+
+  PRINT_ERROR("%s", "Hey there champ!");
 
   init_lexer(contents, filesize);
 
@@ -544,8 +549,8 @@ void test_lexer(void) {
   list_create((void *)&lex->tokens);
 
   while (!LEXER_SOURCE_FINISHED(lex)) {
-    Tprint("Scanning char: %c", lex->source[lex->cursor]);
-    Tprint("Cursor val: %zu", lex->cursor);
+    PRINT_TRACE("Scanning char: %c", lex->source[lex->cursor]);
+    PRINT_TRACE("Cursor val: %zu", lex->cursor);
     scan_token();
     LEXER_INCREMENT(lex);
     lex->line_position.x++;

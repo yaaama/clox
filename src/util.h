@@ -11,23 +11,33 @@
 #define TRACING 0
 
 // Macro to print an error to stderr
-#define Eprintf(format, ...)                                                   \
+#define PRINT_ERROR(format, ...)                                               \
   do {                                                                         \
     if (DEBUG)                                                                 \
       fprintf(stderr, "ERROR->%s:%d: %s(): " format "\n", __FILE__, __LINE__,  \
               __func__, __VA_ARGS__);                                          \
   } while (0)
 
-// For Debugging
-#define Tprint(format, ...)                                                    \
+/* #define PRINT_ERR(...) \ */
+/*   do { \ */
+/*     ISSUE_ERROR("%s", __VA_ARGS__); \ */
+/*   } while (0) */
+
+// For tracing
+#define PRINT_TRACE(format, ...)                                               \
   do {                                                                         \
     if (TRACING)                                                               \
       fprintf(stderr, "TRACE-> %s:%d: %s(): " format "\n", __FILE__, __LINE__, \
               __func__, __VA_ARGS__);                                          \
   } while (0)
 
+/* #define PRINT_TRACE(...) \ */
+/*   do { \ */
+/*     ISSUE_TRACE("%s", __VA_ARGS__); \ */
+/*   } while (0) */
+
 // Debugging message one liner
-#define Tput(msg)                                                              \
+#define PUT_TRACE(msg)                                                         \
   do {                                                                         \
     if (TRACING)                                                               \
       fprintf(stderr, "TRACE->%s:%d: %s(): " msg "\n", __FILE__, __LINE__,     \
