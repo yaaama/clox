@@ -305,6 +305,13 @@ void add_token(TokenType type, const char *beg, size_t len) {
     LEXER_INCREMENT(lex);
   }
 
+  // If the next character is not a WS then we want to read it
+  // For example: "func foo()"
+  // If we do not decrement cursor then the ( will not be read.
+  if (!isspace(lex->source[lex->cursor])) {
+    lex->cursor--;
+  }
+
   // Checking for whether token is a keyword
   if (type == IDENTIFIER) {
     for (size_t i = 0; i < KW_COUNT; i++) {
@@ -313,13 +320,6 @@ void add_token(TokenType type, const char *beg, size_t len) {
       }
     }
   }
-  // If the next character is not a WS then we want to read it
-  // For example, func foo()
-  // If we do not decrement cursor then the ( will not be read.
-  if (!isspace(peek_next(lex->cursor))) {
-    lex->cursor--;
-  }
-
   token->str = tokenStr;
 
   list_node_insert(lex->tokens, token, NULL);
@@ -364,8 +364,11 @@ void scan_token(void) {
     handle_string_literal();
     break;
   }
-  case 0:
+  case 0: {
     add_token(EOF_T, curr, 1);
+    break;
+  }
+
     /* Whitespace ************************************************************/
   case ' ': {
     break;
@@ -465,7 +468,11 @@ void scan_token(void) {
       handle_identifier();
       break;
     }
-    add_token(INVALID, curr, 1);
+
+    // If nothing matches
+    /* add_token(INVALID, curr, 1); */
+    lex->error = true;
+    /* lex->errors[] */
     PRINT_TRACE("Invalid character: %c", *curr);
     break;
   }
