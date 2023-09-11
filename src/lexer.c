@@ -54,8 +54,21 @@ typedef enum TokenType {
   WHILE,
   EOF_T,  // End of file
   INVALID // Invalid
-
 } TokenType;
+
+typedef struct KeyWord {
+  char *word;
+  TokenType token_type;
+} KeyWord;
+
+// Keywords 2d array (acts as a map)
+KeyWord kw[16] = {
+    {"and", AND},   {"class", CLASS}, {"else", ELSE},     {"false", FALSE},
+    {"for", FOR},   {"fun", FUN},     {"if", IF},         {"nil", NIL},
+    {"or", OR},     {"print", PRINT}, {"return", RETURN}, {"super", SUPER},
+    {"this", THIS}, {"true", TRUE},   {"var", VAR},       {"while", WHILE}};
+
+#define KW_COUNT 16
 
 typedef struct LinePosition {
   size_t line; // Line number
@@ -72,11 +85,11 @@ typedef struct Token {
 typedef List_t TokenList; // Where we keep our tokens
 
 typedef struct Lexer {
-  const char *source;         // The source we are lexing
-  size_t source_len;          // Length of the source file
-  TokenList *tokens;          // Stores our tokens (alias for List_t)
-  char curr_char;             // TODO
-  size_t consumed_cursor;     // Tracks the characters we have consumed
+  const char *source; // The source we are lexing
+  size_t source_len;  // Length of the source file
+  TokenList *tokens;  // Stores our tokens (alias for List_t)
+  /* char curr_char;             // TODO */
+  /* size_t consumed_cursor;     // Tracks the characters we have consumed */
   size_t cursor;              // Tracks the position of where we have scanned
   LinePosition line_position; // Which line we are in and where
   bool error;                 // Error flag
@@ -133,6 +146,7 @@ bool is_identifier_continuing(char c) {
   return is_identifier_start(c) || isdigit(c);
 }
 
+/* Returns the next character from the lexer source without consuming it */
 char peek_next(size_t curr_pos) {
 
   if (LEXER_SOURCE_FINISHED(lex)) {
@@ -146,6 +160,7 @@ char peek_next(size_t curr_pos) {
   return lex->source[nextPos];
 }
 
+/* Returns true if the next character is 'c' */
 bool match_next(char c) {
   if (LEXER_SOURCE_FINISHED(lex)) {
     return false;
@@ -178,13 +193,13 @@ void handle_identifier(void) {
 
   while (is_identifier_continuing((peek))) {
 
-    PRINT_TRACE("\tCurr char: %c\n", peek);
+    PRINT_TRACE("\tCurr char: %c, Length: %zu \n", peek, len);
     cursPos++;
     len++;
     end++;
     peek = peek_next(cursPos);
-    PRINT_TRACE("\tLength: %zu\n", len);
   }
+
   add_token(IDENTIFIER, start, len);
 }
 
@@ -267,26 +282,42 @@ void add_token(TokenType type, const char *beg, size_t len) {
 
   assert((token != NULL));
 
-  // Preparing string of the token
-  char *tokenStr = malloc(sizeof(char) * (len + 1));
+  // Preparing string stored in Token
+  char *tokenStr = calloc(1, sizeof(char));
   tokenStr[len] = '\0'; // Terminate token string
 
   size_t index = 0; // Keeps a track of how many iterations we've done
 
-  // If single char
+  // Single char token
   if (len == 1) {
     tokenStr[0] = *beg;
     token->str = tokenStr;
     list_node_insert(lex->tokens, token, NULL);
+    PRINT_TRACE("token str = %s", token->str);
 
     return;
   }
 
-  // If token is not single char...
+  // Multi char token
   while (index < len) {
     tokenStr[index] = lex->source[lex->cursor];
     index++;
     LEXER_INCREMENT(lex);
+  }
+
+  // Checking for whether token is a keyword
+  if (type == IDENTIFIER) {
+    for (size_t i = 0; i < KW_COUNT; i++) {
+      if (strcmp(tokenStr, kw[i].word) == 0) {
+        token->type = kw[i].token_type;
+      }
+    }
+  }
+  // If the next character is not a WS then we want to read it
+  // For example, func foo()
+  // If we do not decrement cursor then the ( will not be read.
+  if (!isspace(peek_next(lex->cursor))) {
+    lex->cursor--;
   }
 
   token->str = tokenStr;
@@ -355,6 +386,16 @@ void scan_token(void) {
     lex->line_position.line += 1;
     break;
   }
+
+  // Division OR the start of a comment
+  case '/': {
+    if (match_next('/')) { // If comment (//)...
+      lex_skip_comment();
+    } else { // If it is single slash...
+      add_token(SLASH, curr, 1);
+    }
+    break;
+  }
     /* Single character tokens ***********************************************/
   case '{': {
     add_token(LEFT_BRACE, curr, 1);
@@ -415,15 +456,6 @@ void scan_token(void) {
                     : add_token(GREATER, curr, 1);
     break;
   }
-  // Division OR the start of a comment
-  case '/': {
-    if (match_next('/')) { // If comment (//)...
-      lex_skip_comment();
-    } else { // If it is single slash...
-      add_token(SLASH, curr, 1);
-    }
-    break;
-  }
   default:
     if (isdigit(*curr)) {
       handle_number_literal();
@@ -433,6 +465,7 @@ void scan_token(void) {
       handle_identifier();
       break;
     }
+    add_token(INVALID, curr, 1);
     PRINT_TRACE("Invalid character: %c", *curr);
     break;
   }
@@ -518,8 +551,8 @@ size_t file_size(FILE *file) {
 
 void print_token(void *tkn) {
   Token *token = (Token *)tkn;
-  printf("Token string: '%s', Line: %zu, pos: %zu, length: %zu\n", token->str,
-         token->pos.line, token->pos.x, token->len);
+  printf("Token string: '%s', type: %d, Line: %zu, pos: %zu, length: %zu\n",
+         token->str, token->type, token->pos.line, token->pos.x, token->len);
 }
 
 void print_tokenlist(void) {
@@ -536,7 +569,7 @@ void print_tokenlist(void) {
 
 void test_lexer(void) {
 
-  FILE *file = open_file("tests/lexer-token-position");
+  FILE *file = open_file("tests/lexer-keywords");
   size_t filesize = file_size(file);
   char *contents = file_contents(file);
   PRINT_TRACE("Contents: %s, filesize: %zu", contents, filesize);
@@ -549,12 +582,11 @@ void test_lexer(void) {
   list_create((void *)&lex->tokens);
 
   while (!LEXER_SOURCE_FINISHED(lex)) {
-    PRINT_TRACE("Scanning char: %c", lex->source[lex->cursor]);
-    PRINT_TRACE("Cursor val: %zu", lex->cursor);
+    PRINT_TRACE("Scanning char: %c. Cursor val: %zu", lex->source[lex->cursor],
+                lex->cursor);
     scan_token();
     LEXER_INCREMENT(lex);
     lex->line_position.x++;
-    print_tokenlist();
   }
   print_tokenlist();
 }

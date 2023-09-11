@@ -1,4 +1,2 @@
-fun example_func() {
-  var return_val == "outside";
-  return return_val
-  }
+fun example_func(){
+()}
