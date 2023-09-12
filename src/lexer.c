@@ -105,13 +105,10 @@ typedef struct Lexer {
 Lexer *lex; // The lexer
 
 /* Function declarations *****************************************************/
-void init_lexer(char *source, size_t sourcelen);
-FILE *file_open(char *filename);       // Opens file
-char *file_open_read(char *filename);  // Opens and returns text from file
-size_t file_size_name(char *filename); // Size of file
-void add_token(TokenType type, const char *beg, size_t len); // Adds a token
-void scan_token(void); // Scans the current character in source
-size_t file_size_ptr(FILE *fileptr);
+void lexer_init(char *source, size_t sourcelen); // Init and allocate lexer
+void tokenlist_insert(TokenType type, const char *beg,
+                      size_t len); // Adds a token
+void scan(void);                   // Scans the current character in source
 
 /*****************************************************************************/
 /*                                   Lexing                                  */
@@ -128,7 +125,7 @@ size_t file_size_ptr(FILE *fileptr);
 /* Helpful macro to retrive the current line the lexer is on  */
 #define LEXER_CURR_LINE(lex) lex->line_position.line
 
-void init_lexer(char *source, size_t sourcelen) {
+void lexer_init(char *source, size_t sourcelen) {
 
   PRINT_TRACE("%s", "Initialising lexer.");
 
@@ -147,15 +144,15 @@ void init_lexer(char *source, size_t sourcelen) {
 }
 
 /* Checks for whether symbol starts */
-bool is_identifier_start(char c) { return isalpha(c) || c == '_'; }
+static bool identifier_starting(char c) { return isalpha(c) || c == '_'; }
 
-/* Checks for whether a symbol is still going on */
-bool is_identifier_continuing(char c) {
-  return is_identifier_start(c) || isdigit(c);
+/* Checks for whether a symbol is still continuing */
+static bool identifier_continuing(char c) {
+  return identifier_starting(c) || isdigit(c);
 }
 
 /* Returns the next character from the lexer source without consuming it */
-char peek_next(size_t curr_pos) {
+static char peek_next_char(size_t curr_pos) {
 
   if (LEXER_SOURCE_FINISHED(lex)) {
     PRINT_TRACE("%sPeeking cancelled.", " ");
@@ -169,12 +166,12 @@ char peek_next(size_t curr_pos) {
 }
 
 /* Returns true if the next character is 'c' */
-bool match_next(char c) {
+static bool matches_next_char(char c) {
   if (LEXER_SOURCE_FINISHED(lex)) {
     return false;
   }
 
-  if (peek_next(lex->cursor) != c) {
+  if (peek_next_char(lex->cursor) != c) {
     return false;
   }
 
@@ -183,45 +180,45 @@ bool match_next(char c) {
 
 /* Handles when an identifier of some kind is encountered.
   An identifier is a string without a quote delimiter. */
-void handle_identifier(void) {
+void tokenize_identifier(void) {
 
   const char *start =
       &(lex->source[lex->cursor]); // Pointer to where identifier starts in the
                                    // source
   size_t cursPos = lex->cursor;    // Where we are currently
   size_t len = 1;                  // The length of the identifier
-  char peek = peek_next(cursPos);  // The next identifier
+  char peek = peek_next_char(cursPos); // The next identifier
   char c = lex->source[cursPos];
 
   PRINT_TRACE("Curr char: '%c'", c);
   // Checks if the current character is the start of a identifier
-  if (!is_identifier_start(c)) {
+  if (!identifier_starting(c)) {
     PRINT_ERROR("Not start identifier: '%c'", c);
     return;
   }
 
-  while (is_identifier_continuing((peek))) {
+  while (identifier_continuing((peek))) {
 
     PRINT_TRACE("Curr char: '%c', id len %zu", peek, len);
     cursPos++;
     len++;
-    peek = peek_next(cursPos);
+    peek = peek_next_char(cursPos);
   }
 
-  add_token(IDENTIFIER, start, len);
+  tokenlist_insert(IDENTIFIER, start, len);
 }
 
 /* Tokenises a string literal, removes the quote marks */
-void handle_string_literal(void) {
+void tokenize_string_literal(void) {
 
   const char *start =
       &(lex->source[lex->cursor]); // Pointer to where symbol starts
   size_t startPos = lex->cursor;
   size_t i = startPos;
 
-  while (peek_next(i) != '"' &&
+  while (peek_next_char(i) != '"' &&
          !((i >= lex->source_len) || (lex->source[i] == '\0'))) {
-    if (peek_next(i) == '\n') {
+    if (peek_next_char(i) == '\n') {
       lex->line_position.line++;
       lex->line_position.x = 0;
     }
@@ -238,12 +235,12 @@ void handle_string_literal(void) {
 
   size_t len = i - startPos; // Length of the literal
 
-  add_token(STRING, start, len);
+  tokenlist_insert(STRING, start, len);
 }
 
 // BUG If you are scanning a string such as big1234a1244, then it will skip the
 // 'a for some reason'.
-void handle_number_literal(void) {
+void tokenize_number_literal(void) {
 
   size_t i = lex->cursor;
 
@@ -254,27 +251,29 @@ void handle_number_literal(void) {
   }
 
   // Scanning through the numbers
-  while (isdigit(peek_next(i))) {
+  while (isdigit(peek_next_char(i))) {
     printf("i: %zu, lex->cursor: %zu\n", i, lex->cursor);
     i++;
   }
 
   // If the while loop stopped because of decimal point...
-  if (peek_next(i) == '.' && isdigit(peek_next(i + 1))) {
+  if (peek_next_char(i) == '.' && isdigit(peek_next_char(i + 1))) {
     i++;
-    while (isdigit(peek_next(i))) {
+    while (isdigit(peek_next_char(i))) {
       printf("i: %zu, lex->cursor: %zu\n", i, lex->cursor);
       i++;
     }
   }
   i++;
   size_t len = i - lex->cursor;
-  add_token(NUMBER, &lex->source[lex->cursor], len);
+  tokenlist_insert(NUMBER, &lex->source[lex->cursor], len);
 }
 
 /* Creates new token and adds it to the linked list stored in the lexer struct
+   This function takes the beginning position, and will iterate over the source
+   and create a fresh string. @len is how long that tokens string should be.
  */
-void add_token(TokenType type, const char *beg, size_t len) {
+void tokenlist_insert(TokenType type, const char *beg, size_t len) {
 
   PRINT_TRACE("Adding token->%s", beg);
 
@@ -337,7 +336,7 @@ void add_token(TokenType type, const char *beg, size_t len) {
 
 /* NOTE UNUSED
    Skips whitespaces and returns next character */
-void lex_skip_whitespace(void) {
+void lx_src_skip_whitespace(void) {
 
   if (LEXER_SOURCE_FINISHED(lex)) {
     return;
@@ -354,15 +353,15 @@ void lex_skip_whitespace(void) {
 }
 
 /* Skips a comment line */
-void lex_skip_comment(void) {
+void lx_src_skip_comment(void) {
 
-  while (!(LEXER_SOURCE_FINISHED(lex)) && peek_next(lex->cursor) != '\n') {
+  while (!(LEXER_SOURCE_FINISHED(lex)) && peek_next_char(lex->cursor) != '\n') {
     LEXER_INCREMENT(lex);
   }
 }
 
 /* Scans the current character in source and lexes it appropiately */
-void scan_token(void) {
+void scan(void) {
 
   if (LEXER_SOURCE_FINISHED(lex)) {
     return;
@@ -373,11 +372,11 @@ void scan_token(void) {
 
   switch (*curr) {
   case '"': {
-    handle_string_literal();
+    tokenize_string_literal();
     break;
   }
   case 0: {
-    add_token(EOF_T, curr, 1);
+    tokenlist_insert(EOF_T, curr, 1);
     break;
   }
 
@@ -404,82 +403,84 @@ void scan_token(void) {
 
   // Division OR the start of a comment
   case '/': {
-    if (match_next('/')) { // If comment (//)...
-      lex_skip_comment();
+    if (matches_next_char('/')) { // If comment (//)...
+      lx_src_skip_comment();
     } else { // If it is single slash...
-      add_token(SLASH, curr, 1);
+      tokenlist_insert(SLASH, curr, 1);
     }
     break;
   }
     /* Single character tokens ***********************************************/
   case '{': {
-    add_token(LEFT_BRACE, curr, 1);
+    tokenlist_insert(LEFT_BRACE, curr, 1);
     break;
   }
   case '}': {
-    add_token(RIGHT_BRACE, curr, 1);
+    tokenlist_insert(RIGHT_BRACE, curr, 1);
     break;
   }
   case '(': {
-    add_token(LEFT_PAREN, curr, 1);
+    tokenlist_insert(LEFT_PAREN, curr, 1);
     break;
   }
   case ')': {
-    add_token(RIGHT_PAREN, curr, 1);
+    tokenlist_insert(RIGHT_PAREN, curr, 1);
     break;
   }
   case ',': {
-    add_token(COMMA, curr, 1);
+    tokenlist_insert(COMMA, curr, 1);
     break;
   }
   case '.': {
-    add_token(DOT, curr, 1);
+    tokenlist_insert(DOT, curr, 1);
     break;
   }
   case '-': {
-    add_token(MINUS, curr, 1);
+    tokenlist_insert(MINUS, curr, 1);
     break;
   }
   case '+': {
-    add_token(PLUS, curr, 1);
+    tokenlist_insert(PLUS, curr, 1);
     break;
   }
   case ';': {
-    add_token(SEMICOLON, curr, 1);
+    tokenlist_insert(SEMICOLON, curr, 1);
     break;
   }
   case '*': {
-    add_token(STAR, curr, 1);
+    tokenlist_insert(STAR, curr, 1);
     break;
   }
   /* Operators *************************************************************/
   case '!': {
-    match_next('=') ? add_token(BANG_EQUAL, curr, 2) : add_token(BANG, curr, 1);
+    matches_next_char('=') ? tokenlist_insert(BANG_EQUAL, curr, 2)
+                           : tokenlist_insert(BANG, curr, 1);
     break;
   }
   case '=': {
-    match_next('=') ? add_token(EQUAL_EQUAL, curr, 2)
-                    : add_token(EQUAL, curr, 1);
+    matches_next_char('=') ? tokenlist_insert(EQUAL_EQUAL, curr, 2)
+                           : tokenlist_insert(EQUAL, curr, 1);
     break;
   }
   case '<': {
-    match_next('=') ? add_token(LESS_EQUAL, curr, 2) : add_token(LESS, curr, 1);
+    matches_next_char('=') ? tokenlist_insert(LESS_EQUAL, curr, 2)
+                           : tokenlist_insert(LESS, curr, 1);
     break;
   }
   case '>': {
-    match_next('=') ? add_token(GREATER_EQUAL, curr, 2)
-                    : add_token(GREATER, curr, 1);
+    matches_next_char('=') ? tokenlist_insert(GREATER_EQUAL, curr, 2)
+                           : tokenlist_insert(GREATER, curr, 1);
     break;
   }
   default:
     // Numbers
     if (isdigit(*curr)) {
-      handle_number_literal();
+      tokenize_number_literal();
       break;
     }
     // Identifiers
-    if (is_identifier_start(*curr)) {
-      handle_identifier();
+    if (identifier_starting(*curr)) {
+      tokenize_identifier();
       break;
     }
 
@@ -493,13 +494,13 @@ void scan_token(void) {
   }
 }
 
-void print_token(void *tkn) {
+void token_print(void *tkn) {
   Token *token = (Token *)tkn;
   printf("Token string: '%s', type: %d, Line: %zu, pos: %zu, length: %zu\n",
          token->str, token->type, token->pos.line, token->pos.x, token->len);
 }
 
-void print_tokenlist(void) {
+void tokenlist_print(void) {
 
   if (lex->tokens->head == NULL) {
     printf("List of tokens is empty!\n");
@@ -507,8 +508,16 @@ void print_tokenlist(void) {
   }
   printf("\n\n-----------------------------------------------");
   printf("\n\t\t-- Token list: --\n");
-  list_foreach(lex->tokens, print_token);
+  list_foreach(lex->tokens, token_print);
   printf("\n-----------------------------------------------\n\n");
+}
+
+void lexer_destroy(Lexer *lex) {
+  PRINT_TRACE("Destroying the lexer! %s", "");
+  free((void *)lex->source);
+  list_destroy(lex->tokens);
+  free(lex);
+  PRINT_TRACE("%s", "Lexer destroyed.");
 }
 
 void test_lexer(void) {
@@ -519,16 +528,17 @@ void test_lexer(void) {
 
   PRINT_TRACE("Contents: \n%s", contents);
 
-  init_lexer(contents, filesize);
+  lexer_init(contents, filesize);
 
   list_create((void *)&lex->tokens);
 
   while (!LEXER_SOURCE_FINISHED(lex)) {
     PRINT_TRACE("Scanning char: %c. Cursor val: %zu", lex->source[lex->cursor],
                 lex->cursor);
-    scan_token();
+    scan();
     LEXER_INCREMENT(lex);
     lex->line_position.x++;
   }
-  print_tokenlist();
+  tokenlist_print();
+  lexer_destroy(lex);
 }

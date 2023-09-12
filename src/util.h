@@ -68,6 +68,7 @@ static Error err_ok = {.error_type = NONE, .msg = NULL};
 /*****************************************************************************/
 
 char *file_open_read(char *filename);
+size_t file_size_name(char *filename);
 void print_usage(void);
 
 #endif // UTIL_H_

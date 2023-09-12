@@ -19,6 +19,7 @@ void print_usage(void) { printf("Usage: %s  <file-to-compile>\n", "<nicer> "); }
 
 /* Functions for file handling ***********************************************/
 
+/* NOTE Unused struct */
 typedef struct File_t {
   size_t file_size;
   char *file_contents;
