@@ -1,4 +1,4 @@
-#include "list.h"
+#include "include/list.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,7 +16,7 @@
  */
 void list_create(void **out) {
 
-  List_t *list = malloc(sizeof(List_t));
+  List_t *list = calloc(1, sizeof(List_t));
   list->size = 0;
   list->head = NULL;
 
@@ -58,6 +58,7 @@ void list_destroy(List_t *list) {
   // If head is null or the size is 0 then just free the List and return
   if (curr == NULL || list->size == 0) {
     free(list);
+    printf("The list was empty! Freeing only the list itself.\n");
     return;
   }
   // Next node
@@ -66,6 +67,7 @@ void list_destroy(List_t *list) {
   size_t counter = 0;
   // Free up all of the nodes
   while (curr) {
+    free(curr->data);
     free(curr);
     counter++;
     curr = next;
@@ -75,7 +77,9 @@ void list_destroy(List_t *list) {
     next = curr->next;
   }
   // Free the tail
+  free(list->tail->data);
   free(list->tail);
+
   counter++;
   fprintf(stdout, "%s: Freed %zu items.", __FUNCTION__, counter);
   // Finally free the list
@@ -172,10 +176,15 @@ void list_get_tail(List_t *list, void **out) {
 
 void list_foreach(List_t *list, void (*operation)(void *e)) {
 
+  size_t count = 0;
+
   ListNode_t *curr = list->head;
 
   while (curr) {
     operation(curr->data);
     curr = curr->next;
+    count++;
   }
+
+  printf("list_foreach: %zu number of operations performed.\n", count);
 }

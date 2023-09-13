@@ -1,6 +1,6 @@
-#include "lexer.h"
-#include "list.h"
-#include "util.h"
+#include "include/lexer.h"
+#include "include/list.h"
+#include "include/util.h"
 #include <assert.h>
 #include <ctype.h>
 #include <stdbool.h>
@@ -8,99 +8,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* A list of token types */
-typedef enum TokenType {
-
-  // Single-character tokens.
-  LEFT_PAREN,  // (
-  RIGHT_PAREN, // )
-  LEFT_BRACE,  // {
-  RIGHT_BRACE, // }
-  COMMA,       // ,
-  DOT,         // .
-  MINUS,       // -
-  PLUS,        // +
-  SEMICOLON,   // ;
-  SLASH,       // /
-  STAR,        // *
-  // One or two character tokens.
-  BANG,          // !
-  BANG_EQUAL,    // !=
-  EQUAL,         // =
-  EQUAL_EQUAL,   // ==
-  GREATER,       // >
-  GREATER_EQUAL, // >=
-  LESS,          // <
-  LESS_EQUAL,    // <=
-  // Literals
-  IDENTIFIER, // The name of a function, variable, or keyword of some kind
-  STRING,     // String literal
-  NUMBER,     // A number literal
-  // Keywords
-  AND,
-  CLASS,
-  ELSE,
-  FALSE,
-  FUN,
-  FOR,
-  IF,
-  NIL,
-  OR,
-  PRINT,
-  RETURN,
-  SUPER,
-  THIS,
-  TRUE,
-  VAR,
-  WHILE,
-  EOF_T,  // End of file
-  INVALID // Invalid
-} TokenType;
-
-/* KeyWord struct */
-typedef struct KeyWord {
-  char *word;
-  TokenType token_type;
-} KeyWord;
-
 /* Keywords 2d array */
 KeyWord kw[16] = {
-    {"and", AND},   {"class", CLASS}, {"else", ELSE},     {"false", FALSE},
-    {"for", FOR},   {"fun", FUN},     {"if", IF},         {"nil", NIL},
-    {"or", OR},     {"print", PRINT}, {"return", RETURN}, {"super", SUPER},
-    {"this", THIS}, {"true", TRUE},   {"var", VAR},       {"while", WHILE}};
+    {"and", TOKEN_AND},     {"class", TOKEN_CLASS},   {"else", TOKEN_ELSE},
+    {"false", TOKEN_FALSE}, {"for", TOKEN_FOR},       {"fun", TOKEN_FUNC},
+    {"if", TOKEN_IF},       {"nil", TOKEN_NIL},       {"or", TOKEN_OR},
+    {"print", TOKEN_PRINT}, {"return", TOKEN_RETURN}, {"super", TOKEN_SUPER},
+    {"this", TOKEN_THIS},   {"true", TOKEN_TRUE},     {"var", TOKEN_VAR},
+    {"while", TOKEN_WHILE}};
 
 /* Macro for how many keywords we have in the language  */
 #define KW_COUNT 16
 
-/* Vector to keep track of location info within the source */
-typedef struct LinePosition {
-  size_t line; // Line number
-  size_t x;    // Where in the line
-} LinePosition;
-
-/* Token structure. */
-typedef struct Token {
-  TokenType type;   // Token type
-  LinePosition pos; // FIXME Its position in source
-  const char *str;  // String literal
-  size_t len;       // Length of the token
-} Token;
-
 typedef List_t TokenList; // Where we keep our tokens
-
-/* The Lexer struct */
-typedef struct Lexer {
-  const char *source; // The source we are lexing
-  size_t source_len;  // Length of the source file
-  TokenList *tokens;  // Stores our tokens (alias for List_t)
-  /* char curr_char;             // TODO */
-  /* size_t consumed_cursor;     // Tracks the characters we have consumed */
-  size_t cursor;              // Tracks the position of where we have scanned
-  LinePosition line_position; // Which line we are in and where
-  bool error;                 // Error flag
-  Error errors[256];          // Array of errors (max 256)
-} Lexer;
 
 Lexer *lex; // The lexer
 
@@ -109,6 +29,7 @@ void lexer_init(char *source, size_t sourcelen); // Init and allocate lexer
 void tokenlist_insert(TokenType type, const char *beg,
                       size_t len); // Adds a token
 void scan(void);                   // Scans the current character in source
+char *tokentype_to_string(TokenType type);
 
 /*****************************************************************************/
 /*                                   Lexing                                  */
@@ -118,10 +39,13 @@ void scan(void);                   // Scans the current character in source
 #define LEXER_INCREMENT(lex) lex->cursor++
 
 /* Macro to check if the source has been fully lexed */
-#define LEXER_SOURCE_FINISHED(lex)                                             \
-  ((lex->cursor >= lex->source_len) || (lex->source[lex->cursor] == '\0')) ? 1 \
-                                                                           : 0
+/* #define LEXER_SOURCE_FINISHED(lex) \ */
+/*   ((lex->cursor > lex->source_len) || (lex->source[lex->cursor] == '\0')) ? 1
+ * \ */
+/*                                                                           : 0
+ */
 
+#define LEXER_SOURCE_FINISHED(lex) ((lex->cursor > lex->source_len)) ? 1 : 0
 /* Helpful macro to retrive the current line the lexer is on  */
 #define LEXER_CURR_LINE(lex) lex->line_position.line
 
@@ -129,7 +53,7 @@ void lexer_init(char *source, size_t sourcelen) {
 
   PRINT_TRACE("%s", "Initialising lexer.");
 
-  lex = malloc(sizeof(Lexer));       // Create our lexer struct
+  lex = calloc(1, sizeof(Lexer));    // Create our lexer struct
   list_create((void *)&lex->tokens); // Creating the tokenlist
   lex->source = source;              // Assigning our source
   lex->source_len = sourcelen;       // The source length
@@ -205,7 +129,7 @@ void tokenize_identifier(void) {
     peek = peek_next_char(cursPos);
   }
 
-  tokenlist_insert(IDENTIFIER, start, len);
+  tokenlist_insert(TOKEN_IDENTIFIER, start, len);
 }
 
 /* Tokenises a string literal, removes the quote marks */
@@ -235,7 +159,7 @@ void tokenize_string_literal(void) {
 
   size_t len = i - startPos; // Length of the literal
 
-  tokenlist_insert(STRING, start, len);
+  tokenlist_insert(TOKEN_STRING, start, len);
 }
 
 // BUG If you are scanning a string such as big1234a1244, then it will skip the
@@ -266,7 +190,7 @@ void tokenize_number_literal(void) {
   }
   i++;
   size_t len = i - lex->cursor;
-  tokenlist_insert(NUMBER, &lex->source[lex->cursor], len);
+  tokenlist_insert(TOKEN_NUMBER, &lex->source[lex->cursor], len);
 }
 
 /* Creates new token and adds it to the linked list stored in the lexer struct
@@ -276,22 +200,23 @@ void tokenize_number_literal(void) {
 void tokenlist_insert(TokenType type, const char *beg, size_t len) {
 
   PRINT_TRACE("Adding token->%s", beg);
-
-  if (lex->cursor >= lex->source_len || lex->source[lex->cursor] == '\0') {
-    PRINT_TRACE("%s", "End of source. Exiting.");
-    return;
-  }
-
-  Token *token = malloc(sizeof(Token));
+  Token *token = calloc(1, sizeof(Token));
   token->type = type;
   token->len = len;
   token->pos.line = lex->line_position.line;
   token->pos.x = lex->line_position.x;
 
+  if (lex->cursor >= lex->source_len || lex->source[lex->cursor] == '\0') {
+    token->type = TOKEN_EOF;
+    list_node_insert(lex->tokens, token, NULL);
+    PRINT_TRACE("%s", "End of source. Exiting.");
+    return;
+  }
+
   assert((token != NULL));
 
   // Preparing string stored in Token
-  char *tokenStr = calloc(1, sizeof(char));
+  char *tokenStr = calloc(len + 1, sizeof(char));
   tokenStr[len] = '\0'; // Terminate token string
 
   size_t index = 0; // Keeps a track of how many iterations we've done
@@ -321,7 +246,7 @@ void tokenlist_insert(TokenType type, const char *beg, size_t len) {
   }
 
   // Checking for whether token is a keyword
-  if (type == IDENTIFIER) {
+  if (type == TOKEN_IDENTIFIER) {
     for (size_t i = 0; i < KW_COUNT; i++) {
       if (strcmp(tokenStr, kw[i].word) == 0) {
         token->type = kw[i].token_type;
@@ -368,15 +293,12 @@ void scan(void) {
   }
 
   const char *curr = &lex->source[lex->cursor]; // Current char
-  PRINT_TRACE("Consumed char: '%c'", *curr);
+  PRINT_TRACE("Scanning char: `%c`", *curr);
 
   switch (*curr) {
-  case '"': {
-    tokenize_string_literal();
-    break;
-  }
   case 0: {
-    tokenlist_insert(EOF_T, curr, 1);
+    PRINT_TRACE("%s End of file reached!", "\n");
+    tokenlist_insert(TOKEN_EOF, curr, 1);
     break;
   }
 
@@ -391,13 +313,13 @@ void scan(void) {
     // Carriage return
   case '\r': {
     lex->line_position.x = 0;
-    lex->line_position.line += 1;
+    lex->line_position.line++;
     break;
   }
     // New line
   case '\n': {
     lex->line_position.x = 0;
-    lex->line_position.line += 1;
+    lex->line_position.line++;
     break;
   }
 
@@ -406,70 +328,79 @@ void scan(void) {
     if (matches_next_char('/')) { // If comment (//)...
       lx_src_skip_comment();
     } else { // If it is single slash...
-      tokenlist_insert(SLASH, curr, 1);
+      tokenlist_insert(TOKEN_SLASH, curr, 1);
     }
     break;
   }
     /* Single character tokens ***********************************************/
   case '{': {
-    tokenlist_insert(LEFT_BRACE, curr, 1);
+    tokenlist_insert(TOKEN_LEFT_BRACE, curr, 1);
     break;
   }
   case '}': {
-    tokenlist_insert(RIGHT_BRACE, curr, 1);
+    tokenlist_insert(TOKEN_RIGHT_BRACE, curr, 1);
     break;
   }
   case '(': {
-    tokenlist_insert(LEFT_PAREN, curr, 1);
+    tokenlist_insert(TOKEN_LEFTPAREN, curr, 1);
     break;
   }
   case ')': {
-    tokenlist_insert(RIGHT_PAREN, curr, 1);
+    tokenlist_insert(TOKEN_RIGHT_PAREN, curr, 1);
     break;
   }
   case ',': {
-    tokenlist_insert(COMMA, curr, 1);
+    tokenlist_insert(TOKEN_COMMA, curr, 1);
     break;
   }
   case '.': {
-    tokenlist_insert(DOT, curr, 1);
+    tokenlist_insert(TOKEN_DOT, curr, 1);
     break;
   }
   case '-': {
-    tokenlist_insert(MINUS, curr, 1);
+    tokenlist_insert(TOKEN_MINUS, curr, 1);
     break;
   }
   case '+': {
-    tokenlist_insert(PLUS, curr, 1);
+    tokenlist_insert(TOKEN_PLUS, curr, 1);
     break;
   }
   case ';': {
-    tokenlist_insert(SEMICOLON, curr, 1);
+    tokenlist_insert(TOKEN_SEMICOLON, curr, 1);
     break;
   }
   case '*': {
-    tokenlist_insert(STAR, curr, 1);
+    tokenlist_insert(TOKEN_STAR, curr, 1);
     break;
   }
   /* Operators *************************************************************/
   case '!': {
-    matches_next_char('=') ? tokenlist_insert(BANG_EQUAL, curr, 2)
-                           : tokenlist_insert(BANG, curr, 1);
+    matches_next_char('=') ? tokenlist_insert(TOKEN_BANG_EQUAL, curr, 2)
+                           : tokenlist_insert(TOKEN_BANG, curr, 1);
     break;
   }
   case '=': {
-    matches_next_char('=') ? tokenlist_insert(EQUAL_EQUAL, curr, 2)
-                           : tokenlist_insert(EQUAL, curr, 1);
+    if (matches_next_char('=')) {
+      tokenlist_insert(TOKEN_EQUAL_EQUAL, curr, 2);
+    } else {
+      tokenlist_insert(TOKEN_EQUAL, curr, 1);
+    }
+    /* matches_next_char('=') ? tokenlist_insert(TOKEN_EQUAL_EQUAL, curr, 2) */
+    /*                        : tokenlist_insert(TOKEN_EQUAL, curr, 1); */
     break;
   }
   case '<': {
-    matches_next_char('=') ? tokenlist_insert(LESS_EQUAL, curr, 2)
-                           : tokenlist_insert(LESS, curr, 1);
+    matches_next_char('=') ? tokenlist_insert(TOKEN_LESS_EQUAL, curr, 2)
+                           : tokenlist_insert(TOKEN_LESS, curr, 1);
     break;
   }
   case '>': {
-    matches_next_char('=') ? tokenlist_insert(GREATER_EQUAL, curr, 2)
-                           : tokenlist_insert(GREATER, curr, 1);
+    matches_next_char('=') ? tokenlist_insert(TOKEN_GREATER_EQUAL, curr, 2)
+                           : tokenlist_insert(TOKEN_GREATER, curr, 1);
+    break;
+  }
+  case '"': {
+    tokenize_string_literal();
     break;
   }
   default:
@@ -496,8 +427,9 @@ void scan(void) {
 
 void token_print(void *tkn) {
   Token *token = (Token *)tkn;
-  printf("Token string: '%s', type: %d, Line: %zu, pos: %zu, length: %zu\n",
-         token->str, token->type, token->pos.line, token->pos.x, token->len);
+  printf("Token string: '%s', type: '%s', Line: %zu, pos: %zu, length: %zu\n",
+         token->str, tokentype_to_string(token->type), token->pos.line,
+         token->pos.x, token->len);
 }
 
 void tokenlist_print(void) {
@@ -512,9 +444,18 @@ void tokenlist_print(void) {
   printf("\n-----------------------------------------------\n\n");
 }
 
+void token_destroy(void *tkn) {
+  Token *token = (Token *)tkn;
+  free((void *)token->str);
+}
+
 void lexer_destroy(Lexer *lex) {
   PRINT_TRACE("Destroying the lexer! %s", "");
   free((void *)lex->source);
+
+  // Freeing all mem from tokens
+  list_foreach(lex->tokens, token_destroy);
+
   list_destroy(lex->tokens);
   free(lex);
   PRINT_TRACE("%s", "Lexer destroyed.");
@@ -522,15 +463,13 @@ void lexer_destroy(Lexer *lex) {
 
 void test_lexer(void) {
 
-  char *source = "tests/lexer-keywords";
+  char *source = "test.lox";
   size_t filesize = file_size_name(source);
   char *contents = file_open_read(source);
 
   PRINT_TRACE("Contents: \n%s", contents);
 
   lexer_init(contents, filesize);
-
-  list_create((void *)&lex->tokens);
 
   while (!LEXER_SOURCE_FINISHED(lex)) {
     PRINT_TRACE("Scanning char: %c. Cursor val: %zu", lex->source[lex->cursor],
@@ -539,6 +478,94 @@ void test_lexer(void) {
     LEXER_INCREMENT(lex);
     lex->line_position.x++;
   }
+
   tokenlist_print();
   lexer_destroy(lex);
+}
+
+char *tokentype_to_string(TokenType type) {
+
+  switch (type) {
+
+  case (TOKEN_LEFTPAREN):
+    return "LEFT_PAREN";
+  case (TOKEN_RIGHT_PAREN):
+    return "RIGHT_PAREN";
+  case (TOKEN_LEFT_BRACE):
+    return "LEFT_BRACE";
+  case (TOKEN_RIGHT_BRACE):
+    return "RIGHT_BRACE";
+  case (TOKEN_COMMA):
+    return "COMMA";
+  case (TOKEN_DOT):
+    return "DOT";
+  case (TOKEN_MINUS):
+    return "MINUS";
+  case (TOKEN_PLUS):
+    return "PLUS";
+  case (TOKEN_SEMICOLON):
+    return "SEMICOLON";
+  case (TOKEN_SLASH):
+    return "SLASH";
+  case (TOKEN_STAR):
+    return "STAR";
+  case (TOKEN_BANG):
+    return "BANG";
+  case (TOKEN_BANG_EQUAL):
+    return "BANG_EQUAL";
+  case (TOKEN_EQUAL):
+    return "EQUAL";
+  case (TOKEN_EQUAL_EQUAL):
+    return "EQUAL_EQUAL ";
+  case (TOKEN_GREATER):
+    return "GREATER";
+  case (TOKEN_GREATER_EQUAL):
+    return "GREATER_EQUAL";
+  case (TOKEN_LESS):
+    return "LESS";
+  case (TOKEN_LESS_EQUAL):
+    return "LESS_EQUAL";
+  case (TOKEN_IDENTIFIER):
+    return "IDENTIFIER";
+  case (TOKEN_STRING):
+    return "STRING";
+  case (TOKEN_NUMBER):
+    return "NUMBER";
+  case (TOKEN_AND):
+    return "AND";
+  case (TOKEN_CLASS):
+    return "CLASS";
+  case (TOKEN_ELSE):
+    return "ELSE";
+  case (TOKEN_FALSE):
+    return "FALSE";
+  case (TOKEN_FUNC):
+    return "FUN";
+  case (TOKEN_FOR):
+    return "FOR";
+  case (TOKEN_IF):
+    return "IF";
+  case (TOKEN_NIL):
+    return "NIL";
+  case (TOKEN_OR):
+    return "OR";
+  case (TOKEN_PRINT):
+    return "PRINT";
+  case (TOKEN_RETURN):
+    return "RETURN";
+  case (TOKEN_SUPER):
+    return "SUPER";
+  case (TOKEN_THIS):
+    return "THIS";
+  case (TOKEN_TRUE):
+    return "TRUE";
+  case (TOKEN_VAR):
+    return "VAR";
+  case (TOKEN_WHILE):
+    return "WHILE";
+  case (TOKEN_EOF):
+    return "EOF_TOKEN";
+  case (TOKEN_INVALID):
+    return "INVALID";
+  }
 }

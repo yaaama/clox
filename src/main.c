@@ -1,5 +1,5 @@
-#include "lexer.h"
-#include "util.h"
+#include "include/lexer.h"
+#include "include/util.h"
 #include <assert.h>
 #include <limits.h>
 #include <stdbool.h>

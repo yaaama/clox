@@ -1,4 +1,4 @@
-#include "util.h"
+#include "include/util.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,8 +71,8 @@ char *file_open_read(char *filename) {
 
   // Retrieving contents of file
   char *contents =
-      malloc(sizeof(char) * (filesize + 1)); // String to store the bytes read
-  contents[filesize] = '\0';                 // Will terminate the char
+      calloc((filesize + 1), sizeof(char)); // String to store the bytes read
+  contents[filesize] = '\0';                // Will terminate the char
   size_t readCount = 0; // Keeps track of the number of bytes read
   size_t loopCount = 0; // Keeps track of iterations
 
