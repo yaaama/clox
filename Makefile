@@ -64,7 +64,7 @@ run:
 	bear -- make all
 	./build/nicer
 
-.PHONY: clean fclean run build/nicer build/%.o
+.PHONY: clean fclean
 .SILENT:
 
 
