@@ -1,5 +1,5 @@
 #include "include/lexer.h"
-#include "include/list.h"
+/* #include "include/list.h" */
 #include "include/util.h"
 #include <assert.h>
 #include <ctype.h>
@@ -20,10 +20,6 @@ KeyWord kw[16] = {
 /* Macro for how many keywords we have in the language  */
 #define KW_COUNT 16
 
-typedef List_t TokenList; // Where we keep our tokens
-
-/* Lexer *lexer; // The lexer */
-
 /* Function declarations *****************************************************/
 Lexer *init_lexer(char *source, size_t sourcelen); // Init and allocate lexer
 void tokenlist_insert(Lexer *lexer, TokenType type, const char *beg,
@@ -43,19 +39,46 @@ char *tokentype_to_string(TokenType type);
 /*   ((lex->cursor > lex->source_len) || (lex->source[lex->cursor] == '\0')) ? 1
                                                                            : 0
                                                                            */
-
 #define LEXER_SOURCE_FINISHED(lex) ((lex->cursor > lex->source_len)) ? 1 : 0
+
 /* Helpful macro to retrive the current line the lexer is on  */
 #define LEXER_CURR_LINE(lex) lex->line_position.line
+
+TokenList *create_tokenlist(void) {
+  TokenList *list = calloc(1, sizeof(TokenList));
+  list->head = NULL;
+  list->tail = NULL;
+  list->size = 0;
+
+  return list;
+}
+
+void tknlist_insert(TokenList *list, Token *token) {
+  assert(list != NULL && token != NULL);
+
+  list->size++;
+  TokenListNode *newNode = calloc(1, sizeof(TokenListNode));
+  newNode->token = token;
+
+  if (list->head == NULL) {
+    list->head = newNode;
+    list->tail = list->head;
+  } else {
+    TokenListNode *prevTail = list->tail;
+    list->tail->next = newNode;
+    newNode->previous = prevTail;
+    list->tail = newNode;
+  }
+}
 
 Lexer *init_lexer(char *source, size_t sourcelen) {
 
   PRINT_TRACE("%s", "Initialising lexer.");
   Lexer *lexer;
-  lexer = calloc(1, sizeof(Lexer));    // Create our lexer struct
-  list_create((void *)&lexer->tokens); // Creating the tokenlist
-  lexer->source = source;              // Assigning our source
-  lexer->source_len = sourcelen;       // The source length
+  lexer = calloc(1, sizeof(Lexer)); // Create our lexer struct
+  lexer->tokens = create_tokenlist();
+  lexer->source = source;        // Assigning our source
+  lexer->source_len = sourcelen; // The source length
   PRINT_TRACE("Source is: '%s', source length is '%zu'", lexer->source,
               lexer->source_len);
 
@@ -212,7 +235,7 @@ void tokenlist_insert(Lexer *lexer, TokenType type, const char *beg,
   if (lexer->cursor >= lexer->source_len ||
       lexer->source[lexer->cursor] == '\0') {
     token->type = TOKEN_EOF;
-    list_node_insert(lexer->tokens, token, NULL);
+    tknlist_insert(lexer->tokens, token);
     PRINT_TRACE("%s", "End of source. Exiting.");
     return;
   }
@@ -229,7 +252,7 @@ void tokenlist_insert(Lexer *lexer, TokenType type, const char *beg,
   if (len == 1) {
     tokenStr[0] = *beg;
     token->str = tokenStr;
-    list_node_insert(lexer->tokens, token, NULL);
+    tknlist_insert(lexer->tokens, token);
     PRINT_TRACE("token str = %s", token->str);
 
     return;
@@ -259,7 +282,7 @@ void tokenlist_insert(Lexer *lexer, TokenType type, const char *beg,
   }
   token->str = tokenStr;
 
-  list_node_insert(lexer->tokens, token, NULL);
+  tknlist_insert(lexer->tokens, token);
   PRINT_TRACE("token str = %s", token->str);
 }
 
@@ -445,8 +468,27 @@ void tokenlist_print(Lexer *lexer) {
   }
   printf("\n\n-----------------------------------------------");
   printf("\n\t\t-- Token list: --\n");
-  list_foreach(lexer->tokens, token_print);
+
+  TokenListNode *curr = lexer->tokens->head;
+  while (curr) {
+    token_print(curr->token);
+    curr = curr->next;
+  }
   printf("\n-----------------------------------------------\n\n");
+}
+
+void tknlist_foreach(TokenList *list, void (*operation)(void *e)) {
+
+  size_t count = 0;
+  TokenListNode *curr = list->head;
+
+  while (curr) {
+    operation(curr->token);
+    curr = curr->next;
+    count++;
+  }
+
+  printf("list_foreach: %zu number of operations performed.\n", count);
 }
 
 void token_destroy(void *tkn) {
@@ -459,9 +501,9 @@ void lexer_destroy(Lexer *lex) {
   free((void *)lex->source);
 
   // Freeing all mem from tokens
-  list_foreach(lex->tokens, token_destroy);
-
-  list_destroy(lex->tokens);
+  tknlist_foreach(lex->tokens, token_destroy);
+  tknlist_foreach(lex->tokens, free);
+  free(lex->tokens);
   free(lex);
   PRINT_TRACE("%s", "Lexer destroyed.");
 }

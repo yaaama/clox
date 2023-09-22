@@ -10,19 +10,20 @@
 /* A list of token types */
 typedef enum TokenType {
 
-  // Single-character tokens.
+  /* Single char tokens ******************************************************/
   TOKEN_LEFTPAREN,   // (
   TOKEN_RIGHT_PAREN, // )
   TOKEN_LEFT_BRACE,  // {
   TOKEN_RIGHT_BRACE, // }
   TOKEN_COMMA,       // ,
-  TOKEN_DOT,         // .
-  TOKEN_MINUS,       // -
-  TOKEN_PLUS,        // +
   TOKEN_SEMICOLON,   // ;
-  TOKEN_SLASH,       // /
-  TOKEN_STAR,        // *
-  // One or two character tokens.
+
+  TOKEN_DOT,   // .
+  TOKEN_MINUS, // -
+  TOKEN_PLUS,  // +
+  TOKEN_SLASH, // /
+  TOKEN_STAR,  // *
+  /* 1 or 2 char tokens ******************************************************/
   TOKEN_BANG,          // !
   TOKEN_BANG_EQUAL,    // !=
   TOKEN_EQUAL,         // =
@@ -31,11 +32,11 @@ typedef enum TokenType {
   TOKEN_GREATER_EQUAL, // >=
   TOKEN_LESS,          // <
   TOKEN_LESS_EQUAL,    // <=
-  // Literals
+  /* Literals ****************************************************************/
   TOKEN_IDENTIFIER, // The name of a function, variable, or keyword of some kind
   TOKEN_STRING,     // String literal
   TOKEN_NUMBER,     // A number literal
-  // Keywords
+  /* Keywords ****************************************************************/
   TOKEN_AND,
   TOKEN_CLASS,
   TOKEN_ELSE,
@@ -75,11 +76,25 @@ typedef struct Token {
   size_t len;       // Length of the token
 } Token;
 
+typedef struct TOKENLIST_NODE_STRUCT {
+  Token *token;
+  struct TOKENLIST_NODE_STRUCT *next;
+  struct TOKENLIST_NODE_STRUCT *previous;
+
+} TokenListNode;
+
+typedef struct TOKENLIST_STRUCT {
+  TokenListNode *head;
+  TokenListNode *tail;
+  size_t size;
+
+} TokenList;
+
 /* The Lexer struct */
 typedef struct Lexer {
   const char *source; // The source we are lexing
   size_t source_len;  // Length of the source file
-  List_t *tokens;     // Stores our tokens (alias for List_t)
+  TokenList *tokens;  // Stores our tokens (alias for List_t)
   /* char curr_char;             // TODO */
   /* size_t consumed_cursor;     // Tracks the characters we have consumed */
   size_t cursor;              // Tracks the position of where we have scanned
@@ -91,5 +106,6 @@ typedef struct Lexer {
 void test_lexer(void);
 Lexer *init_lexer(char *source, size_t filesize);
 void lexer_lex(Lexer *lexer);
+char *tokentype_to_string(TokenType type);
 
 #endif // LEXER_H_
