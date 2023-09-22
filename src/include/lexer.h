@@ -89,5 +89,7 @@ typedef struct Lexer {
 } Lexer;
 
 void test_lexer(void);
+Lexer *init_lexer(char *source, size_t filesize);
+void lexer_lex(Lexer *lexer);
 
 #endif // LEXER_H_
