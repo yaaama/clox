@@ -1,0 +1,10 @@
+class Breakfast {
+  cook() {
+    print "Eggs a-fryin'!";
+  }
+
+  ding() {
+  print "hi hi";
+}
+
+}
