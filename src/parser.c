@@ -8,8 +8,8 @@ Parser *init_parser(Lexer *lex) {
 
   Parser *parser = calloc(1, sizeof(Parser));
   parser->lexer = lex;
-  parser->tkn_list = lex->tokens;
-  parser->tkn_node = lex->tokens->head;
+  /* parser->tkn_list = lex->tokens; */
+  /* parser->tkn_node = lex->tokens->head; */
   parser->token = parser->tkn_node->token;
 
   return parser;

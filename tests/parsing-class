@@ -3,6 +3,7 @@ class Breakfast {
     print "Eggs a-fryin'!";
   }
 
+// This is a comment
   ding() {
   print "hi hi";
 }
