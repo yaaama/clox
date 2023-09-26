@@ -1,9 +1,50 @@
 #include "include/list.h"
+#include "include/util.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #define IS_NOT_NULL(a) (a != NULL)
+/*****************************************************************************/
+/*                               Dynamic array                               */
+/*****************************************************************************/
+
+array_T *array_create(size_t item_size) {
+
+  array_T *array = calloc(1, sizeof(array_T));
+
+  array->size = 0;
+  array->item_size = item_size;
+
+  return array;
+}
+
+void array_push(array_T *array, void *item) {
+
+  assert(array != NULL && "Array was null");
+
+  if (!item) {
+    return;
+  }
+
+  array->size += 1;
+
+  if (!array->items) {
+    array->items = calloc(1, array->item_size);
+  } else {
+    array->items =
+        realloc(array->items, (array->size * sizeof(array->item_size)));
+  }
+
+  array->items[array->size - 1] = item;
+}
+
+// TODO Implement this
+void array_destroy(array_T *array);
+
+/*****************************************************************************/
+/*                             Doubly linked list                            */
+/*****************************************************************************/
 
 /**
  *  \brief Creates a new doubly linked list and assigns it to the out argument.

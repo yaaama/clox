@@ -1,6 +1,27 @@
 #ifndef LIST_H_
 #define LIST_H_
+#include <stddef.h>
 #include <stdlib.h>
+
+/*****************************************************************************/
+/*                               Dynamic array                               */
+/*****************************************************************************/
+
+typedef struct ARRAY_STRUCT {
+
+  void **items;
+  size_t size;
+  size_t item_size;
+
+} array_T;
+
+array_T *array_create(size_t item_size);
+void array_push(array_T *array, void *item);
+void array_destroy(array_T *array);
+
+/*****************************************************************************/
+/*                             Doubly linked list                            */
+/*****************************************************************************/
 
 typedef struct ListNode_t {
   void *data;
