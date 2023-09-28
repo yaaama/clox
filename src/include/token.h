@@ -66,4 +66,10 @@ typedef struct Token {
   size_t len;       // Length of the token
 } Token;
 
+/* KeyWord struct */
+typedef struct KeyWord {
+  char *word;
+  TokenType token_type;
+} KeyWord;
+
 #endif // TOKEN_H_

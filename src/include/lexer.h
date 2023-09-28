@@ -7,27 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* KeyWord struct */
-typedef struct KeyWord {
-  char *word;
-  TokenType token_type;
-} KeyWord;
-/* Vector to keep track of location info within the source */
-
-typedef struct TOKENLIST_NODE_STRUCT {
-  Token *token;
-  struct TOKENLIST_NODE_STRUCT *next;
-  struct TOKENLIST_NODE_STRUCT *previous;
-
-} TokenListNode;
-
-typedef struct TOKENLIST_STRUCT {
-  TokenListNode *head;
-  TokenListNode *tail;
-  size_t size;
-
-} TokenList;
-
 /* The Lexer struct */
 typedef struct Lexer {
   const char *source; // The source we are lexing
