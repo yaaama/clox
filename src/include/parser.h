@@ -4,6 +4,7 @@
 #include "ast.h"
 #include "lexer.h"
 #include "list.h"
+#include "token.h"
 #include "util.h"
 
 // Parsing
@@ -13,8 +14,6 @@
 
 typedef struct PARSER_STRUCT {
   Lexer *lexer;
-  TokenListNode *tkn_node;
-  TokenList *tkn_list;
   Token *token;
 } Parser;
 

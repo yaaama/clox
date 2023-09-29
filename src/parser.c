@@ -1,22 +1,25 @@
 #include "include/parser.h"
 #include "include/lexer.h"
+#include "include/token.h"
+#include <stdio.h>
 #include <string.h>
 
-// TODO: Create data structures for each type of expression
+static size_t index = 0;
 
 Parser *init_parser(Lexer *lex) {
-
   Parser *parser = calloc(1, sizeof(Parser));
   parser->lexer = lex;
-  /* parser->tkn_list = lex->tokens; */
-  /* parser->tkn_node = lex->tokens->head; */
-  parser->token = parser->tkn_node->token;
+
+  if (parser->lexer->token_list->items) {
+    parser->token = (Token *)parser->lexer->token_list->items[index];
+  } else {
+    exit(1);
+  }
 
   return parser;
 }
 
 void parser_destroy(Parser *parser) {
-
   // Free lexer->source
   // Free lexer->token->str
   // Free lexer->tokens (individually)
@@ -28,7 +31,6 @@ void parser_destroy(Parser *parser) {
 
 // Returns the token that has been eaten and advances to next token
 Token *eat(Parser *parser, TokenType type) {
-
   if (parser->token->type != type) {
     PRINT_ERROR("Error! Token type expected: `%s`, but received: `%s`",
                 tokentype_to_string(type),
@@ -37,8 +39,14 @@ Token *eat(Parser *parser, TokenType type) {
   }
 
   Token *curr = parser->token;
-  parser->tkn_node = parser->tkn_node->next;
-  parser->token = parser->tkn_node->token;
+  if (index < parser->lexer->token_list->size) {
+    index++;
+    Token *next = (Token *)parser->lexer->token_list->items[index];
+    parser->token = next;
+  } else {
+    printf("Finished parsing!\n");
+    exit(1);
+  }
 
   printf("Eaten token with type `%s`\n", tokentype_to_string(type));
 
@@ -46,7 +54,6 @@ Token *eat(Parser *parser, TokenType type) {
 }
 
 AST_t *parse_statement(Parser *parser) {
-
   AST_t *ast = ast_create(AST_STATEMENT);
   TokenType type = parser->token->type;
   if (type == TOKEN_FOR) {
@@ -61,7 +68,6 @@ AST_t *parse_statement(Parser *parser) {
 }
 
 AST_t *parse_identifier(Parser *parser) {
-
   if (parser->token->type != TOKEN_IDENTIFIER) {
     printf("No identifier found. \n");
     return NULL;
@@ -93,7 +99,6 @@ AST_t *parse_block(Parser *parser) {
 }
 
 AST_t *parse_args(Parser *parser) {
-
   /* printf("Parsing arguments.\n"); */
   eat(parser, TOKEN_LEFTPAREN);
 
@@ -115,7 +120,6 @@ AST_t *parse_args(Parser *parser) {
 }
 
 AST_t *parse_function(Parser *parser) {
-
   /* printf("Function being parsed.\n"); */
   AST_t *ast = ast_create(AST_COMPOUND);
 
@@ -135,7 +139,6 @@ AST_t *parse_function(Parser *parser) {
 }
 
 AST_t *parse_class(Parser *parser) {
-
   AST_t *ast = ast_create(AST_COMPOUND);
   /* printf("Class being parsed: `%p`\n", (void *)ast); */
   eat(parser, TOKEN_CLASS);
@@ -160,7 +163,6 @@ AST_t *parse_class(Parser *parser) {
 // NOTE: Declaration = classDeclaration | funDeclaration
 //                   | varDeclaration | statement
 AST_t *parse_declaration(Parser *parser) {
-
   /* AST_t *ast = ast_create(AST_DECLARATION); */
   AST_t *ast = ast_create(AST_COMPOUND);
   /* printf("Declaration being parsed: `%p`\n", (void *)ast); */
@@ -188,7 +190,6 @@ AST_t *parse_declaration(Parser *parser) {
 }
 
 AST_t *parse_program(Parser *parser) {
-
   AST_t *ast = ast_create(AST_COMPOUND);
   ast->type = AST_PROGRAM;
 
@@ -199,26 +200,5 @@ AST_t *parse_program(Parser *parser) {
   }
 
   pretty_print_ast(ast, 0);
-
   return ast;
-}
-
-// Function to pretty print an AST node and its children
-void pretty_print_ast(AST_t *node, int depth) {
-  if (node == NULL) {
-    return;
-  }
-
-  // Print indentation based on the depth of the node
-  for (int i = 0; i < depth; i++) {
-    printf("  ");
-  }
-
-  // Print the node's name and type
-  printf("%s (%d)\n", node->name, node->type);
-
-  // Recursively print the children of the node
-  for (size_t i = 0; i < node->children->size; i++) {
-    pretty_print_ast(node->children->items[i], depth + 1);
-  }
 }
