@@ -39,35 +39,6 @@ void scan(Lexer *lexer);
 
 #define LEXER_SOURCE_FINISHED(lex) ((lex->cursor > lex->source_len) ? 1 : 0)
 
-/****************************************************************************/
-// NOTE: Unused
-static TokenList *create_tokenlist(void) {
-  TokenList *list = calloc(1, sizeof(TokenList));
-  list->head = NULL;
-  list->tail = NULL;
-  list->size = 0;
-
-  return list;
-}
-static void tknlist_insert(TokenList *list, Token *token) {
-  assert(list != NULL && token != NULL);
-
-  list->size++;
-  TokenListNode *newNode = calloc(1, sizeof(TokenListNode));
-  newNode->token = token;
-
-  if (list->head == NULL) {
-    list->head = newNode;
-    list->tail = list->head;
-  } else {
-    TokenListNode *prevTail = list->tail;
-    list->tail->next = newNode;
-    newNode->previous = prevTail;
-    list->tail = newNode;
-  }
-}
-/****************************************************************************/
-
 Lexer *lexer_init(char *source, size_t sourcelen) {
 
   printf("\n\nInitialising lexer.\n\n");
@@ -103,11 +74,13 @@ char lexer_advance(Lexer *lexer) {
 }
 
 /* Checks for whether symbol starts */
-static bool identifier_starting(char c) { return isalpha(c) || c == '_'; }
+static inline bool identifier_starting(char c) {
+  return isalpha(c) || c == '_';
+}
 
 // NOTE: Unused
 /* Checks for whether a symbol is still continuing */
-static bool identifier_continuing(char c) {
+static inline bool identifier_continuing(char c) {
   return identifier_starting(c) || isdigit(c);
 }
 
@@ -491,20 +464,6 @@ void tokenlist_print(Lexer *lexer) {
 
   printf("\t Total number of tokens: `%zu`\n", i);
   printf("-----------------------------------------------\n\n");
-}
-
-void tknlist_foreach(TokenList *list, void (*operation)(void *e)) {
-
-  size_t count = 0;
-  TokenListNode *curr = list->head;
-
-  while (curr) {
-    operation(curr->token);
-    curr = curr->next;
-    count++;
-  }
-
-  printf("list_foreach: %zu number of operations performed.\n", count);
 }
 
 void token_destroy(void *tkn) {
