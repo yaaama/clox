@@ -72,4 +72,6 @@ typedef struct KeyWord {
   TokenType token_type;
 } KeyWord;
 
+char *tokentype_to_string(TokenType type);
+
 #endif // TOKEN_H_

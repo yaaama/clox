@@ -28,7 +28,6 @@ void tokenlist_insert(Lexer *lexer, TokenType type, const char *beg,
                       const char *end);
 // Scans the current character in source
 void scan(Lexer *lexer);
-char *tokentype_to_string(TokenType type);
 
 /*****************************************************************************/
 /*                                   Lexing                                  */

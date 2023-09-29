@@ -19,6 +19,5 @@ typedef struct Lexer {
 void test_lexer(void);
 Lexer *lexer_init(char *source, size_t filesize);
 void lexer_lex(Lexer *lexer);
-char *tokentype_to_string(TokenType type);
 
 #endif // LEXER_H_
