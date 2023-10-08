@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+AST_t *parse_declaration(Parser *parser);
+
 static size_t index = 0;
 
 Parser *init_parser(Lexer *lex) {
@@ -59,9 +61,20 @@ AST_t *parse_statement(Parser *parser) {
   if (type == TOKEN_FOR) {
     // Handle for loops
   } else if (type == TOKEN_PRINT) {
+
+    ast->type = AST_PRINT_STMT;
     eat(parser, TOKEN_PRINT);
+
+    /*   // TODO Finish implementing this */
+    /* ast->print_stmt.print_targets = array_create(sizeof(AST_t *)); */
+    /* while (parser->token->type != TOKEN_SEMICOLON) { */
+
+    /*   array_push(ast->print_stmt.print_targets, parse_expression(parser)); */
+    /* } */
+
+    // FIXME 2023-10-08 Remove this and replace with the code above after
+    // implementing expression parsing
     eat(parser, TOKEN_STRING);
-    // handle print statement
   }
   eat(parser, TOKEN_SEMICOLON);
   return ast;
@@ -73,12 +86,12 @@ AST_t *parse_identifier(Parser *parser) {
     return NULL;
   }
   Token *token = eat(parser, TOKEN_IDENTIFIER);
-  AST_t *ast = ast_create(AST_VAR);
-  ast->name = token->str;
+  AST_t *ast = ast_create(AST_STRING_LIT);
+  ast->str_literal.str = token;
   return ast;
 }
 
-AST_t *parse_block(Parser *parser) {
+array_T *parse_block(Parser *parser) {
   eat(parser, TOKEN_LEFT_BRACE);
 
   // Empty block
@@ -87,18 +100,17 @@ AST_t *parse_block(Parser *parser) {
     return NULL;
   }
 
-  AST_t *ast = ast_create(AST_COMPOUND);
-
+  array_T *blockbody = array_create(sizeof(AST_t *));
   while (parser->token->type != TOKEN_RIGHT_BRACE) {
-    array_push(ast->children, parse_statement(parser));
+    array_push(blockbody, parse_declaration(parser));
   }
 
   eat(parser, TOKEN_RIGHT_BRACE);
 
-  return ast;
+  return blockbody;
 }
 
-AST_t *parse_args(Parser *parser) {
+array_T *parse_args(Parser *parser) {
   /* printf("Parsing arguments.\n"); */
   eat(parser, TOKEN_LEFTPAREN);
 
@@ -107,32 +119,35 @@ AST_t *parse_args(Parser *parser) {
     return NULL;
   }
 
-  AST_t *ast = ast_create(AST_COMPOUND);
+  array_T *args = array_create(sizeof(Token *));
 
   while (parser->token->type != TOKEN_RIGHT_PAREN) {
-    array_push(ast->children, parse_identifier(parser));
+    array_push(args, eat(parser, TOKEN_IDENTIFIER));
+    if (parser->token->type == TOKEN_RIGHT_PAREN) {
+      break;
+    }
     eat(parser, TOKEN_COMMA);
   }
 
   eat(parser, TOKEN_RIGHT_PAREN);
 
-  return ast;
+  return args;
 }
 
 AST_t *parse_function(Parser *parser) {
-  /* printf("Function being parsed.\n"); */
   AST_t *ast = ast_create(AST_COMPOUND);
+  ast->type = AST_FUNC_DECL;
+  printf("[FUNC PTR] `%p`\n", (void *)ast);
+  eat(parser, TOKEN_FUNC);
 
-  ast->name = eat(parser, TOKEN_IDENTIFIER)->str;
+  ast->func_decl.name = eat(parser, TOKEN_IDENTIFIER);
 
   // parse arguments
-  AST_t *args = parse_args(parser);
-  if (args) {
-    array_push(ast->children, args);
-  }
-  AST_t *block = parse_block(parser);
-  if (block) {
-    array_push(ast->children, block);
+  ast->func_decl.args = parse_args(parser);
+
+  ast->func_decl.children = parse_block(parser);
+  if (ast->func_decl.children != NULL) {
+    ast->func_decl.has_body = true;
   }
 
   return ast;
@@ -140,19 +155,24 @@ AST_t *parse_function(Parser *parser) {
 
 AST_t *parse_class(Parser *parser) {
   AST_t *ast = ast_create(AST_COMPOUND);
+  printf("[CLASS PTR] `%p`\n", (void *)ast);
+  ast->type = AST_CLASS_DECL;
+
   /* printf("Class being parsed: `%p`\n", (void *)ast); */
   eat(parser, TOKEN_CLASS);
 
-  if (parser->token->type == TOKEN_IDENTIFIER) {
-    ast->name = parser->token->str;
-  }
+  Token *name = eat(parser, TOKEN_IDENTIFIER);
+  ast->class_decl.name = name;
 
-  eat(parser, TOKEN_IDENTIFIER);
   /* printf("Class name is: `%s`\n", ast->name); */
   eat(parser, TOKEN_LEFT_BRACE);
 
   while (parser->token->type != TOKEN_RIGHT_BRACE) {
     array_push(ast->children, parse_function(parser));
+  }
+
+  if (ast->children != NULL) {
+    ast->class_decl.has_body = 1;
   }
 
   eat(parser, TOKEN_RIGHT_BRACE);
@@ -164,29 +184,30 @@ AST_t *parse_class(Parser *parser) {
 //                   | varDeclaration | statement
 AST_t *parse_declaration(Parser *parser) {
   /* AST_t *ast = ast_create(AST_DECLARATION); */
-  AST_t *ast = ast_create(AST_COMPOUND);
-  /* printf("Declaration being parsed: `%p`\n", (void *)ast); */
 
   // Parse class
-  if (parser->token->type == TOKEN_CLASS) {
-    array_push(ast->children, parse_class(parser));
+  switch (parser->token->type) {
 
-  } else if (parser->token->type == TOKEN_FUNC) {
-    // TODO
-    eat(parser, TOKEN_FUNC);
+  case TOKEN_CLASS: {
+    return parse_class(parser);
+  }
+  case TOKEN_FUNC: {
 
-  } else if (parser->token->type == TOKEN_VAR) {
-    // TODO
-    // Parse variable declaration
-    eat(parser, TOKEN_VAR);
-
-  } else {
-    // TODO
-    // Parse statement
-    parse_statement(parser);
+    return parse_function(parser);
   }
 
-  return ast;
+  case TOKEN_VAR: {
+    // parse var
+    return NULL;
+  }
+
+  default: {
+
+    return parse_statement(parser);
+  }
+  }
+
+  return NULL;
 }
 
 AST_t *parse_program(Parser *parser) {

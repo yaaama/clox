@@ -14,8 +14,8 @@ int main(void) {
   Lexer *lexer = lexer_init(contents, filesize);
   lexer_lex(lexer);
 
-  /* Parser *parser = init_parser(lexer); */
-  /* parse_program(parser); */
+  Parser *parser = init_parser(lexer);
+  parse_program(parser);
 
   /* Parser_t *parser = init_parser(lexer); */
 }

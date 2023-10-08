@@ -1,11 +1,17 @@
 class Breakfast {
-  cook() {
+  fun cook(a, b) {
     print "Eggs a-fryin'!";
   }
 
 // This is a comment
-  ding() {
-  print "hi hi";
+  fun prepare() {
+  print "Preparing food...";
 }
 
+fun outerFunction(a, b, c, d, e) {
+  fun localFunction() {
+    print "I'm local!";
+  }
+
+}
 }
